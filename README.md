@@ -48,18 +48,34 @@ Nếu **Snap Decode** giúp ích cho việc học tập và nghiên cứu của 
 
 ## 📦 Cài đặt
 
-### Bước 1: Kích hoạt Backend (Làm 1 lần duy nhất)
-- Nhấp đúp vào file `setup_auto_backend.bat` trong thư mục dự án.
-- File script sẽ tự động đăng ký cấu hình Chrome Native Messaging Host vào Windows Registry. Điều này cho phép Extension giao tiếp trực tiếp với engine xử lý QR cục bộ tốc độ cao mà không cần duy trì tiến trình chạy ngầm làm tốn RAM.
-- *(Lưu ý: Bạn chỉ cần thực hiện bước này đúng 1 lần khi mới cài đặt hoặc khi chuyển thư mục dự án sang vị trí khác).*
+> [!NOTE]
+> Bạn **không cần biết lập trình hay gõ lệnh phức tạp**. Toàn bộ quá trình cài đặt chỉ mất khoảng 1 phút qua 3 bước cực kỳ đơn giản:
 
-### Bước 2: Thêm Extension vào trình duyệt Chrome
-1. Mở trình duyệt Chrome (hoặc Brave / Edge / Cốc Cốc), truy cập vào đường dẫn:  
-   `chrome://extensions/`
-2. Bật công tắc **Developer mode** *(Chế độ cho nhà phát triển)* ở góc trên cùng bên phải màn hình.
-3. Nhấp vào nút **Load unpacked** *(Tải tiện ích đã giải nén)* ở góc trên bên trái.
-4. Trỏ và chọn thư mục gốc của dự án `Snap-Decode`.
-5. Sau khi cài xong, bạn nên nhấp vào biểu tượng **Mảnh ghép** (Extensions) trên thanh công cụ của Chrome và chọn **Ghim (Pin)** icon Snap Decode lên thanh trình duyệt để thao tác nhanh hơn.
+### Bước 1: Tải bộ cài đặt về máy tính
+1. Nhìn lên góc trên bên phải của trang GitHub này, bấm vào nút màu xanh lá cây **`Code`** ▾.
+2. Chọn **`Download ZIP`** để tải trọn bộ tiện ích về máy.
+3. Sau khi tải xong, nhấp chuột phải vào file `.zip` vừa tải $\rightarrow$ Chọn **`Extract All...`** *(Giải nén tất cả)* $\rightarrow$ Bấm **Extract**.
+4. 💡 **Mẹo nhỏ:** Hãy chuyển thư mục `Snap-Decode` vừa giải nén đến một nơi lưu trữ cố định (ví dụ: ổ `D:\` hoặc thư mục `Documents`), **tránh để trong thư mục Downloads** rồi vô tình xóa nhầm, vì Extension sẽ chạy trực tiếp từ thư mục này.
+
+---
+
+### Bước 2: Kích hoạt bộ xử lý ngầm (Chỉ cần làm đúng 1 lần)
+1. Mở thư mục `Snap-Decode` vừa giải nén.
+2. Tìm và **nhấp đúp chuột (double-click)** vào file **`setup_auto_backend.bat`** *(nếu máy tính của bạn ẩn phần mở rộng đuôi file thì file có tên là `setup_auto_backend`)*.
+3. Cửa sổ màu đen sẽ hiện lên và tự động thiết lập trong 1-2 giây rồi hoàn tất:
+   - *Nếu Windows hiện màn hình xanh "Windows protected your PC":* Bạn chỉ cần bấm vào chữ **`More info`** $\rightarrow$ Chọn **`Run anyway`** *(Chạy bất kể)* là xong.
+   - Script này giúp tính năng quét mã QR tự động bật/tắt ngầm khi cần, hoàn toàn không chạy ngầm liên tục làm tốn RAM hay nặng máy.
+
+---
+
+### Bước 3: Thêm Extension vào trình duyệt Chrome (hoặc Edge / Cốc Cốc / Brave)
+1. Mở trình duyệt Chrome, copy dòng sau dán vào thanh địa chỉ rồi nhấn **Enter**:  
+   `chrome://extensions/`  
+   *(Nếu bạn dùng Microsoft Edge thì truy cập: `edge://extensions/`)*
+2. Bật công tắc **`Developer mode`** *(Chế độ cho nhà phát triển)* ở góc trên cùng bên phải màn hình.
+3. Nhấp vào nút **`Load unpacked`** *(Tải tiện ích đã giải nén)* ở góc trên bên trái.
+4. Trỏ đến và chọn đúng thư mục **`Snap-Decode`** $\rightarrow$ Bấm **`Select Folder`** *(Chọn thư mục)*.
+5. **Ghim lên thanh công cụ:** Bấm vào biểu tượng **Mảnh ghép** (🧩) ở góc trên bên phải trình duyệt $\rightarrow$ Nhấp vào biểu tượng **Cái ghim** (📌) cạnh tên `Snap Decode` để tiện sử dụng mọi lúc.
 
 ---
 
