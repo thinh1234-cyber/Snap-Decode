@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════════════════════════
 // PROVIDERS/SLIDESHARE.JS — SlideShare Downloader & PDF Engine
 // Tự động thu thập toàn bộ slide độ nét cao (HD 2048px/1024px),
-// cơ chế 3 tầng: Next.js Store -> slidesharedownloader.top API -> DOM Fallback,
+// cơ chế 2 tầng: Next.js Store -> DOM Fallback (slidesharecdn.com an toàn CSP),
 // cơ chế tải tuần tự song song (concurrency pool) chống nghẽn mạng đối với tài liệu lớn (>80-150 trang),
-// chống trang trắng / mất trang, căn chuẩn khổ giấy A4 Ngang/Dọc 100vw x 100vh không bao giờ thừa trang trắng.
+// chống trang trắng / mất trang, căn chuẩn khổ giấy A4 Ngang/Dọc 100% x 100% không bao giờ thừa trang trắng.
 // ═══════════════════════════════════════════════════════════
 
 (() => {
@@ -64,8 +64,21 @@
           const loc = slidesInfo.imageLocation;
           const sTitle = slidesInfo.title;
 
-          // Sắp xếp các độ phân giải từ lớn nhất đến nhỏ nhất (2048 -> 1024 -> 638 -> 320)
-          const sortedSizes = [...slidesInfo.imageSizes].sort((a, b) => (b.width || 0) - (a.width || 0));
+          // Sắp xếp các độ phân giải:
+          // Với tài liệu lớn (>= 50 slide), ưu tiên 1024px để tiết kiệm 4x RAM và chống tràn bộ nhớ GPU Skia gây trang trắng
+          // Với tài liệu nhỏ (< 50 slide), ưu tiên 2048px nét tuyệt đối
+          let sortedSizes;
+          if (totalSlides >= 50) {
+            sortedSizes = [...slidesInfo.imageSizes].sort((a, b) => {
+              const aW = a.width || 0;
+              const bW = b.width || 0;
+              const scoreA = aW === 1024 ? 10000 : (aW === 2048 ? 5000 : aW);
+              const scoreB = bW === 1024 ? 10000 : (bW === 2048 ? 5000 : bW);
+              return scoreB - scoreA;
+            });
+          } else {
+            sortedSizes = [...slidesInfo.imageSizes].sort((a, b) => (b.width || 0) - (a.width || 0));
+          }
 
           const slideCandidates = [];
           for (let i = 1; i <= totalSlides; i++) {
@@ -89,46 +102,9 @@
       return null;
     },
 
-    // ── Tầng 2: Gọi API dự phòng (slidesharedownloader.top / slidesvapi) ──
+    // ── Tầng 2: API Fallback (Bypassed to comply with SlideShare CSP restrictions) ──
     async extractFromApiFallback() {
-      const cleanUrl = window.location.href.split("?")[0].replace(/\/+$/, "");
-      const endpoints = [
-        "https://api.slidesharedownloader.top/",
-        "https://slidesvapi.vercel.app/"
-      ];
-
-      for (const ep of endpoints) {
-        try {
-          const res = await fetch(ep, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Accept": "application/json"
-            },
-            body: JSON.stringify({
-              slideshareUrl: cleanUrl,
-              downloadFormat: "pdf",
-              quality: "hd"
-            })
-          });
-
-          if (!res.ok) continue;
-          const data = await res.json();
-          if (data && data.success && Array.isArray(data.images) && data.images.length > 0) {
-            const totalSlides = data.totalSlides || data.images.length;
-            const slideCandidates = data.images.map(imgUrl => [imgUrl]);
-            return {
-              source: "API_FALLBACK",
-              title: data.title || "",
-              totalSlides,
-              dimensions: null,
-              slideCandidates
-            };
-          }
-        } catch (e) {
-          console.warn(`[SnapDoc] API fallback error on ${ep}:`, e);
-        }
-      }
+      // Third-party API calls (e.g. slidesharedownloader.top) are bypassed to avoid CSP blocking
       return null;
     },
 
@@ -201,7 +177,12 @@
       if (pattern && totalSlides > 0) {
         const slideCandidates = [];
         for (let i = 1; i <= totalSlides; i++) {
-          const cands = [
+          const cands = totalSlides >= 50 ? [
+            `${pattern.base.replace(`/${pattern.quality}/`, "/85/")}-${i}-1024.${pattern.ext}`,
+            `${pattern.base.replace(`/${pattern.quality}/`, "/75/")}-${i}-2048.${pattern.ext}`,
+            `${pattern.base.replace(`/${pattern.quality}/`, "/85/")}-${i}-638.${pattern.ext}`,
+            `${pattern.base}-${i}-${pattern.width}.${pattern.ext}`
+          ] : [
             `${pattern.base.replace(`/${pattern.quality}/`, "/75/")}-${i}-2048.${pattern.ext}`,
             `${pattern.base.replace(`/${pattern.quality}/`, "/85/")}-${i}-1024.${pattern.ext}`,
             `${pattern.base.replace(`/${pattern.quality}/`, "/85/")}-${i}-638.${pattern.ext}`,
@@ -223,7 +204,7 @@
 
     // ── Pipeline thu thập slide đa tầng ───────────────────────
     async collectSlideData(onProgress) {
-      if (onProgress) onProgress(0, 0, 15, "Đang trích xuất dữ liệu gốc...");
+      if (onProgress) onProgress(0, 0, 20, "Đang trích xuất dữ liệu gốc...");
 
       // Tầng 1: Next.js Store
       let result = this.extractFromNextData();
@@ -233,16 +214,7 @@
         return result;
       }
 
-      // Tầng 2: Gọi API ngoài
-      if (onProgress) onProgress(0, 0, 25, "Đang kết nối API phân giải slide...");
-      result = await this.extractFromApiFallback();
-      if (result) {
-        console.log("[SnapDoc] Thu thập thành công qua API Fallback:", result);
-        if (onProgress) onProgress(result.totalSlides, result.totalSlides, 40, `Tìm thấy ${result.totalSlides} slide qua API!`);
-        return result;
-      }
-
-      // Tầng 3: DOM Fallback
+      // Tầng 2: DOM Fallback (An toàn tuyệt đối với SlideShare CSP)
       if (onProgress) onProgress(0, 0, 35, "Đang phân tích cấu trúc trang DOM...");
       result = this.extractFromDOMFallback();
       if (result) {
@@ -281,12 +253,12 @@
       const displayW = Math.round(origW * previewScale);
       const displayH = Math.round(origH * previewScale);
 
-      // Căn chỉnh cho tất cả container slide trên màn hình
+      // Căn chỉnh cho tất cả container slide trên màn hình preview
       const allPfs = container.querySelectorAll(".pf");
       allPfs.forEach(pf => {
-        pf.style.setProperty("width", `${displayW}px`, "important");
-        pf.style.setProperty("height", `${displayH}px`, "important");
-        pf.style.setProperty("aspect-ratio", `${origW} / ${origH}`, "important");
+        pf.style.setProperty("width", `${displayW}px`);
+        pf.style.setProperty("height", `${displayH}px`);
+        pf.style.setProperty("aspect-ratio", `${origW} / ${origH}`);
       });
 
       // Đảm bảo phần tử cuối có class snap-last-slide
@@ -294,7 +266,7 @@
         allPfs[allPfs.length - 1].classList.add("snap-last-slide");
       }
 
-      // Cập nhật stylesheet in ấn động: Dùng 100vw x 100vh để không bao giờ có trang trắng thừa
+      // Cập nhật stylesheet in ấn động: Dùng 100vw x 100vh và object-fit: contain để mọi tỷ lệ (4:3, 16:9, A4) nằm gọn đúng 1 trang
       const prevDynamic = document.getElementById("snap-slideshare-autoscale-style");
       if (prevDynamic) prevDynamic.remove();
 
@@ -311,6 +283,8 @@
             padding: 0 !important;
             background: #fff !important;
             overflow: visible !important;
+            width: 100% !important;
+            height: 100% !important;
           }
           #snap-slideshare-modal {
             position: static !important;
@@ -318,6 +292,8 @@
             height: auto !important;
             background: #fff !important;
             overflow: visible !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
           #snap-slideshare-modal .snap-modal-bar,
           #snap-slideshare-modal .snap-modal-loading {
@@ -328,6 +304,8 @@
             margin: 0 !important;
             gap: 0 !important;
             display: block !important;
+            width: 100% !important;
+            height: auto !important;
           }
           #snap-slideshare-modal .snap-modal-pages .pf {
             width: 100vw !important;
@@ -356,12 +334,13 @@
             break-after: auto !important;
           }
           #snap-slideshare-modal .snap-modal-pages .pf img {
-            max-width: 100% !important;
-            max-height: 100% !important;
+            max-width: 100vw !important;
+            max-height: 100vh !important;
             width: auto !important;
             height: auto !important;
             object-fit: contain !important;
             display: block !important;
+            margin: auto !important;
           }
         }
       `;
@@ -413,18 +392,41 @@
       const actions = document.createElement("div");
       actions.className = "snap-modal-actions";
 
+      const prepareForPrint = () => {
+        modal.querySelectorAll(".pf").forEach(pf => {
+          pf.style.removeProperty("width");
+          pf.style.removeProperty("height");
+          pf.style.removeProperty("aspect-ratio");
+        });
+      };
+
+      const restoreAfterPrint = () => {
+        const pagesEl = modal.querySelector(".snap-modal-pages");
+        if (pagesEl && window.__SnapDocSlideShare) {
+          window.__SnapDocSlideShare.applyAutoscale(pagesEl, { printBtn, pageBadge });
+        }
+      };
+
       const printBtn = document.createElement("button");
       printBtn.className = "snap-btn-print";
       printBtn.textContent = "⏳ Đang chuẩn bị...";
       printBtn.disabled = true;
       printBtn.style.opacity = "0.5";
-      printBtn.addEventListener("click", () => window.print());
+      printBtn.addEventListener("click", () => {
+        prepareForPrint();
+        window.print();
+      });
+
+      window.addEventListener("beforeprint", prepareForPrint);
+      window.addEventListener("afterprint", restoreAfterPrint);
 
       const closeBtn = document.createElement("button");
       closeBtn.className = "snap-btn-close";
       closeBtn.textContent = "✕ Đóng";
 
       const doClose = () => {
+        window.removeEventListener("beforeprint", prepareForPrint);
+        window.removeEventListener("afterprint", restoreAfterPrint);
         modal.remove();
         const dynamicStyle = document.getElementById("snap-slideshare-autoscale-style");
         if (dynamicStyle) dynamicStyle.remove();
@@ -664,6 +666,11 @@
 
     // ── Full Pipeline Execution ───────────────────────────────
     async generatePDF(UI) {
+      const existingModal = document.getElementById("snap-slideshare-modal");
+      if (existingModal) existingModal.remove();
+      const prevDynamic = document.getElementById("snap-slideshare-autoscale-style");
+      if (prevDynamic) prevDynamic.remove();
+
       this.injectOverlayStyles();
       const modalUI = this.createModal("SlideShare Presentation");
       document.body.appendChild(modalUI.modal);
@@ -786,15 +793,31 @@
 
       await Promise.all(workers);
 
-      // Đã nạp xong 100% toàn bộ các slide
-      modalUI.sub.textContent = `✅ Đã sẵn sàng in ${total} slide!`;
+      // Kiểm tra chất lượng nạp ảnh trước khi cho phép in
       modalUI.loading.style.display = "none";
       this.applyAutoscale(modalUI.pages, modalUI, presentationData.dimensions);
 
-      // Tự động mở hộp thoại in sau nhịp nghỉ ngắn
-      setTimeout(() => {
-        if (modalUI.printBtn) modalUI.printBtn.click();
-      }, 600);
+      if (successCount === total) {
+        modalUI.sub.textContent = `✅ Đã sẵn sàng in đầy đủ ${total} slide!`;
+        // Tự động mở hộp thoại in sau nhịp nghỉ ngắn khi 100% ảnh hợp lệ
+        setTimeout(() => {
+          if (modalUI.printBtn) modalUI.printBtn.click();
+        }, 600);
+      } else if (successCount > 0) {
+        modalUI.sub.textContent = `⚠️ Chỉ tải được ${successCount}/${total} slide. Một số trang bị lỗi mạng.`;
+        if (modalUI.printBtn) {
+          modalUI.printBtn.textContent = `🖨️ In slide khả dụng (${successCount}/${total} slides)`;
+        }
+        alert(`SnapDoc cảnh báo: Chỉ tải thành công ${successCount}/${total} slide (có ${total - successCount} slide bị lỗi). Vui lòng kiểm tra trên màn hình trước khi in!`);
+      } else {
+        modalUI.sub.textContent = `❌ Không tải được hình ảnh slide nào.`;
+        if (modalUI.printBtn) {
+          modalUI.printBtn.disabled = true;
+          modalUI.printBtn.style.opacity = "0.5";
+          modalUI.printBtn.textContent = "❌ Lỗi tải slide";
+        }
+        alert("SnapDoc: Không tải được hình ảnh slide nào. Vui lòng kiểm tra lại kết nối mạng và thử lại!");
+      }
     }
   };
 })();

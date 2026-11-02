@@ -1,13 +1,12 @@
-# Python & PyInstaller
+# Temporary & Cache
 __pycache__/
 *.py[cod]
-*$py.class
-backend/__pycache__/
-backend/build/
-backend/dist/
-backend/native_host.json
-backend/*.spec
 scratch/
+
+# Documentation (Internal)
+docs/
+chrome-store-package/
+*.pdf
 
 # Logs
 logs

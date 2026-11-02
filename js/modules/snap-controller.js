@@ -34,7 +34,7 @@ async function injectAndStartSnap(tab, mode) {
       await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ["css/content.css"] });
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ["js/content.js"]
+        files: ["js/lib/jsqr.js", "js/modules/qr-decoder.js", "js/content.js"]
       });
     }
 

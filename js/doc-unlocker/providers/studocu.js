@@ -11,7 +11,6 @@
     '[class*="PremiumPageClarificationBanner"]',
     '[class*="PremiumBanner"]',
     '[class*="BlobWrapper"]',
-    '[class*="overflowWrapper"]',
     '[class*="previewBanner"]',
     '[class*="isFloating"]',
     '[class*="blobContainer"]',
@@ -103,7 +102,6 @@
         [class*="InlineBanner"],
         [class*="PremiumPageClarificationBanner"],
         [class*="BlobWrapper"],
-        [class*="overflowWrapper"],
         [class*="previewBanner"],
         [class*="isFloating"],
         [class*="Shapes-module"],
@@ -198,37 +196,94 @@
       });
     },
 
-    // ── Incremental Capture to Defeat Virtualized React Scroller ──
-    captureAllPages(onProgress) {
-      // Find all page wrappers using [data-page-index] to avoid missing virtualized pages
-      let pageWrappers = Array.from(
-        document.querySelectorAll("#page-container > [data-page-index]")
-      );
-      if (!pageWrappers.length) {
-        pageWrappers = Array.from(document.querySelectorAll("[data-page-index]"));
-      }
-      if (!pageWrappers.length) {
-        pageWrappers = Array.from(document.querySelectorAll(".pf"));
+    // ── Extract Total Pages from __NEXT_DATA__ or DOM ─────────
+    getTotalPages() {
+      // 1. Next.js Store (__NEXT_DATA__)
+      try {
+        const nextScript = document.querySelector("#__NEXT_DATA__");
+        if (nextScript && nextScript.textContent) {
+          const nd = JSON.parse(nextScript.textContent);
+          const doc = nd.props?.pageProps?.document || nd.props?.pageProps?.doc || {};
+          const count = doc.numberOfPages || doc.totalPages || doc.pageCount ||
+                        nd.props?.pageProps?.documentAccess?.totalPages ||
+                        nd.props?.pageProps?.totalPages;
+          if (count && Number(count) > 0) return Number(count);
+        }
+      } catch (e) {
+        console.warn("[SnapDoc] Error reading total pages from __NEXT_DATA__:", e);
       }
 
-      const total = pageWrappers.length || 1;
+      // 2. Scan max data-page-index in DOM
+      const pageElements = document.querySelectorAll("[data-page-index]");
+      if (pageElements.length > 0) {
+        let maxIdx = -1;
+        let minIdx = 999999;
+        pageElements.forEach(el => {
+          const idx = parseInt(el.getAttribute("data-page-index"), 10);
+          if (!isNaN(idx)) {
+            if (idx > maxIdx) maxIdx = idx;
+            if (idx < minIdx) minIdx = idx;
+          }
+        });
+        if (maxIdx >= 0) {
+          return minIdx === 0 ? maxIdx + 1 : maxIdx;
+        }
+      }
+
+      // 3. Fallback to existing .pf elements
+      const pfList = document.querySelectorAll(".pf");
+      if (pfList.length > 0) return pfList.length;
+
+      return 1;
+    },
+
+    // ── Incremental Capture to Defeat Virtualized React Scroller ──
+    async captureAllPages(onProgress) {
+      const total = this.getTotalPages();
       const captured = [];
       const container = document.getElementById("viewer-wrapper") ||
                         document.getElementById("document-wrapper") ||
+                        document.querySelector("#page-container")?.parentElement ||
                         document.scrollingElement || document.documentElement;
       const savedTop = container ? container.scrollTop : 0;
 
-      return new Promise(resolve => {
-        let i = 0;
-        const next = () => {
-          if (i >= pageWrappers.length) {
-            if (container) container.scrollTop = savedTop;
-            resolve(captured);
-            return;
-          }
+      // Determine 0-based or 1-based indexing
+      const hasZeroIndex = !!document.querySelector("[data-page-index='0']");
+      const startIndex = hasZeroIndex ? 0 : 1;
+      const endIndex = startIndex + total - 1;
 
-          const wrapper = pageWrappers[i];
+      // Helper to find or wait for virtualized page element
+      const getPageElement = async (pageIdx, seqNum) => {
+        let el = document.querySelector(`[data-page-index="${pageIdx}"]`);
+        if (el) return el;
 
+        // If not in DOM due to virtualized scroller, scroll container toward estimated position
+        if (container) {
+          const estScroll = (container.scrollHeight || document.body.scrollHeight) * ((seqNum - 1) / Math.max(1, total));
+          container.scrollTop = estScroll;
+          window.scrollTo({ top: estScroll, behavior: "instant" });
+        }
+
+        // Wait up to 2.4s for React to mount the page into DOM
+        const maxTries = 20;
+        for (let t = 0; t < maxTries; t++) {
+          await new Promise(r => setTimeout(r, 120));
+          el = document.querySelector(`[data-page-index="${pageIdx}"]`);
+          if (el) return el;
+        }
+
+        // Fallback: search by class or nth pf element if index selector not found
+        const pfs = document.querySelectorAll(".pf");
+        if (pfs[seqNum - 1]) return pfs[seqNum - 1];
+
+        return null;
+      };
+
+      for (let p = startIndex; p <= endIndex; p++) {
+        const seqNum = p - startIndex + 1;
+        const wrapper = await getPageElement(p, seqNum);
+
+        if (wrapper) {
           // 1. Force unhide wrapper and its children BEFORE scrolling
           wrapper.style.setProperty("display", "block", "important");
           wrapper.style.setProperty("visibility", "visible", "important");
@@ -254,21 +309,29 @@
           wrapper.scrollIntoView({ behavior: "instant", block: "center" });
 
           // 4. Wait for page stability and capture
-          this.waitForPageReady(wrapper).then(() => {
-            const pf = wrapper.classList.contains("pf") ? wrapper : wrapper.querySelector(".pf");
-            if (pf) {
-              captured.push(pf.cloneNode(true));
-            } else {
-              captured.push(wrapper.cloneNode(true));
-            }
+          await this.waitForPageReady(wrapper);
 
-            i++;
-            if (onProgress) onProgress(i, total);
-            setTimeout(next, 100);
-          });
-        };
-        next();
-      });
+          const pf = wrapper.classList.contains("pf") ? wrapper : wrapper.querySelector(".pf");
+          if (pf) {
+            captured.push(pf.cloneNode(true));
+          } else {
+            captured.push(wrapper.cloneNode(true));
+          }
+        }
+
+        if (onProgress) onProgress(seqNum, total);
+        await new Promise(r => setTimeout(r, 60));
+      }
+
+      // Restore scroller position
+      if (container) container.scrollTop = savedTop;
+
+      // Final fallback if virtualized index failed to capture any pages
+      if (captured.length === 0) {
+        document.querySelectorAll(".pf").forEach(pf => captured.push(pf.cloneNode(true)));
+      }
+
+      return captured;
     },
 
     // ── Convert Images to Data URIs (Prevents Print 403 & Blank Pages) ──

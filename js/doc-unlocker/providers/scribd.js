@@ -27,45 +27,68 @@
       const pathname = window.location.pathname;
 
       // Bước 1: Nếu đang ở trang xem tài liệu thường -> Mở Clean Embed URL
-      const docMatch = pathname.match(/\/(?:document|doc)\/(\d+)/);
-      if (docMatch && !pathname.includes("/embeds/")) {
+      const isEmbed = pathname.includes("/embeds/");
+      const docMatch = pathname.match(/\/(?:document|doc|presentation|slideshow|article|read)\/(\d+)/i) ||
+                       pathname.match(/\/(\d{6,})(?:[/?#]|$)/);
+      if (docMatch && !isEmbed) {
         const docId = docMatch[1];
-        const embedUrl = `https://www.scribd.com/embeds/${docId}/content#snap_autodownload=1`;
+        const embedUrl = `https://www.scribd.com/embeds/${docId}/content?start_page=1&view_mode=scroll#snap_autodownload=1`;
         window.open(embedUrl, "_blank");
         return;
       }
 
-      // Bước 2: Kích hoạt Main World Bridge can thiệp trực tiếp vào scope thực của Scribd
-      this.injectMainWorldBridge();
-
-      // Bước 3: Tính toán tỷ lệ co giãn A4 AutoFit chuẩn xác
       UI.showProgress("Scribd Downloader", "Đang khởi tạo cấu trúc và tính toán tỷ lệ...");
-      this.setupAutoFitPrintEngine();
 
-      // Bước 4: PIPELINE TUẦN TỰ NẠP TỪNG TRANG VÀ NẠP TOÀN BỘ ẢNH ABSIMG
-      await this.scrollFullDocument(UI);
+      try {
+        // Bước 2: Kích hoạt Main World Bridge can thiệp trực tiếp vào scope thực của Scribd
+        this.injectMainWorldBridge();
 
-      // Bước 5: DỌN DẸP & ÉP HIỂN THỊ 100% CẢ OUTER LẪN INNER PAGE
-      UI.updateProgress("Đang hoàn tất đóng gói toàn bộ các trang...", 96);
-      this.cleanupDOM();
+        // Chờ ít nhất có .outer_page đầu tiên hoặc window.docManager trước khi tính tỷ lệ & cuộn
+        const scroller = document.querySelector(".document_scroller");
+        await this.waitForPagesInit(scroller, 15000);
 
-      UI.updateProgress("Hoàn tất nạp 100%! Đang mở hộp thoại in...", 100);
+        // Bước 3: Tính toán tỷ lệ co giãn A4 AutoFit chuẩn xác
+        this.setupAutoFitPrintEngine();
 
-      // Bước 6: Mở hộp thoại in sau nhịp nghỉ ngắn
-      setTimeout(() => {
-        const btn = document.getElementById("snap-doc-floating-btn");
-        if (btn) btn.remove();
-        const overlay = document.getElementById("snap-doc-overlay");
-        if (overlay) overlay.remove();
+        // Bước 4: PIPELINE TUẦN TỰ NẠP TỪNG TRANG VÀ NẠP TOÀN BỘ ẢNH ABSIMG
+        await this.scrollFullDocument(UI);
+
+        // Bước 5: DỌN DẸP & ÉP HIỂN THỊ 100% CẢ OUTER LẪN INNER PAGE
+        UI.updateProgress("Đang kiểm tra rà soát toàn bộ các trang...", 92);
+        this.cleanupDOM();
+
+        // Bước 5.5: PASS 2 VERIFICATION BARRIER — Đảm bảo 100% trang, ảnh và font chữ đã sẵn sàng
+        UI.updateProgress("Đang đồng bộ hóa toàn bộ ảnh và font chữ...", 96);
+        await this.verifyAndFinalizeAllPages(UI);
+
+        UI.updateProgress("Hoàn tất 100%! Đang mở hộp thoại in...", 100);
+
+        // Bước 6: Nhịp nghỉ ổn định 1.5s để GPU và layout render trọn vẹn
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
         // Cuộn về đỉnh trang trước khi in
-        const scroller = document.querySelector(".document_scroller");
-        if (scroller) scroller.scrollTop = 0;
+        const finalScroller = document.querySelector(".document_scroller");
+        if (finalScroller) finalScroller.scrollTop = 0;
         window.scrollTo({ top: 0, behavior: "instant" });
 
-        UI.hideProgress();
+        // Ẩn và xóa overlay và nút nổi trực tiếp trước khi gọi window.print()
+        const overlay = document.getElementById("snap-doc-overlay");
+        if (overlay) overlay.remove();
+        const floatBtn = document.getElementById("snap-doc-floating-btn");
+        if (floatBtn) {
+          floatBtn.style.setProperty("display", "none", "important");
+          floatBtn.remove();
+        }
+
+        // Tự động kích hoạt in
         window.print();
-      }, 700);
+      } catch (err) {
+        console.error("[SnapDoc] Scribd pipeline error:", err);
+        alert("SnapDoc: Quá trình xử lý tài liệu Scribd gặp lỗi. Vui lòng tải lại trang và thử lại!");
+      } finally {
+        UI.hideProgress();
+        this.stopDocManagerHook();
+      }
     },
 
     // ── Main World Bridge: Can thiệp trực tiếp vào scope thực của Scribd ──
@@ -107,6 +130,16 @@
 
           function hookDocManager() {
             if (!window.docManager) return;
+
+            // Broadcast total page count to DOM attribute for Content Script discovery
+            try {
+              const total = window.docManager.pageCount ||
+                            window.docManager.total_pages ||
+                            (window.docManager.pages ? Object.keys(window.docManager.pages).length : 0);
+              if (total && total > 0) {
+                document.documentElement.setAttribute("data-snap-scribd-total", total.toString());
+              }
+            } catch (e) {}
 
             // 1. Chặn _updateDisplayOnPages & _removeUnusedPages trên ViewManager và docManager
             if (window.docManager._currentViewManager) {
@@ -202,7 +235,7 @@
                     try { p.load(); } catch (e) {}
                   }
                 } else {
-                  // Trang đã có DOM: đảm bảo hiển thị và kích hoạt ảnh
+                  // Trang đã có DOM: đảm bảo hiển thị và kích hoạt ảnh (tránh kích hoạt _initHidersCSS của Scribd FontLoader)
                   p.displayOn = true;
                   p.displayDirty = false;
                   p._innerPageVisible = true;
@@ -237,7 +270,15 @@
           }
 
           hookDocManager();
-          setInterval(hookDocManager, 500);
+          let hookIntervalId = setInterval(hookDocManager, 500);
+
+          // Lắng nghe sự kiện dừng hook khi pipeline hoàn tất
+          window.addEventListener("SNAP_SCRIBD_STOP_HOOK", () => {
+            if (hookIntervalId) {
+              clearInterval(hookIntervalId);
+              hookIntervalId = null;
+            }
+          });
 
           // Lắng nghe sự kiện nạp nhóm trang từ Content Script qua DOM Attribute
           window.addEventListener("SNAP_SCRIBD_LOAD_CHUNK", () => {
@@ -250,6 +291,36 @@
         })();
       `;
       (document.head || document.documentElement).appendChild(script);
+    },
+
+    stopDocManagerHook() {
+      window.dispatchEvent(new CustomEvent("SNAP_SCRIBD_STOP_HOOK"));
+    },
+
+    // ── Chờ DOM và DocumentManager khởi tạo xong trước khi cuộn nạp ──
+    async waitForPagesInit(scroller, maxWaitMs = 15000) {
+      const startTime = Date.now();
+      while (Date.now() - startTime < maxWaitMs) {
+        const hasOuter = !!document.querySelector(".outer_page, .newpage, #outer_page_1");
+        const attrTotal = parseInt(document.documentElement.getAttribute("data-snap-scribd-total") || "0", 10);
+        let dmTotal = 0;
+        try {
+          if (typeof window !== "undefined" && window.docManager) {
+            dmTotal = window.docManager.pageCount || window.docManager.total_pages ||
+              (window.docManager.pages ? Object.keys(window.docManager.pages).length : 0) || 0;
+          }
+        } catch (e) {}
+
+        if (hasOuter || attrTotal > 0 || dmTotal > 0) {
+          return true;
+        }
+
+        if (scroller) {
+          scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+        }
+        await new Promise(r => setTimeout(r, 200));
+      }
+      return false;
     },
 
     // ── Engine tính toán tỷ lệ A4 chuẩn xác (Không dùng CSS zoom) ──
@@ -350,7 +421,7 @@
             display: block !important;
             visibility: visible !important;
             opacity: 1 !important;
-            contain: none !important;
+            contain: strict !important;
             overflow: hidden !important;
             margin: 0 auto !important;
             padding: 0 !important;
@@ -385,8 +456,25 @@
           }
           .between_page_ads, .between_page_module, .related_docs, .document_cell,
           .toolbar_drop, .mobile_overlay, header, footer, .global_header,
+          .brand_header, .sticky_header, #between_page_ads,
           .bottom_actions, #font_preload_bed, .ad_unit, .banner {
             display: none !important;
+          }
+          #snap-doc-overlay, #snap-doc-floating-btn {
+            display: none !important;
+          }
+          .text_layer, .text_layer *, div[class*="ff"], .ie_fix {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            color: #000 !important;
+            text-shadow: none !important;
+          }
+          .text_layer span {
+            display: inline !important;
+          }
+          .text_layer span.w {
+            display: inline-block !important;
           }
         }
       `;
@@ -396,52 +484,72 @@
       this.targetH = targetH;
     },
 
-    // ── Pipeline quét nạp theo từng nhóm trang (Chunked Batch Pipeline) ──
+    // ── Pipeline quét nạp Dynamic Discovery & Sequential Chunk Loading ──
     async scrollFullDocument(UI) {
       const scroller = document.querySelector(".document_scroller");
-      const pages = Array.from(document.querySelectorAll(".outer_page"));
-      const total = pages.length || 1;
+      await this.waitForPagesInit(scroller, 15000);
 
-      // Đánh dấu trang cuối cùng để CSS không thêm trang trắng thừa
-      if (pages.length > 0) {
-        pages[pages.length - 1].classList.add("snap-last-page");
-      }
-
-      // Xử lý nạp tuần tự theo nhóm 3 trang để tối ưu socket pool và tránh bị CDN rate limit
-      const CHUNK_SIZE = 3;
-
-      for (let c = 0; c < pages.length; c += CHUNK_SIZE) {
-        const chunkStart = c + 1;
-        const chunkEnd = Math.min(pages.length, c + CHUNK_SIZE);
-
-        // Truyền thông tin nhóm trang qua DOM attribute an toàn tuyệt đối qua Chrome worlds
-        document.documentElement.setAttribute("data-snap-chunk-start", chunkStart.toString());
-        document.documentElement.setAttribute("data-snap-chunk-end", chunkEnd.toString());
-        window.dispatchEvent(new CustomEvent("SNAP_SCRIBD_LOAD_CHUNK"));
-
-        for (let i = c; i < chunkEnd; i++) {
-          const pageEl = pages[i];
-          if (!pageEl) continue;
-
-          // Cuộn trực tiếp document_scroller để kích hoạt viewport của Scribd
-          if (scroller) {
-            scroller.scrollTop = pageEl.offsetTop;
-            scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+      const getTotalPages = () => {
+        const attrTotal = parseInt(document.documentElement.getAttribute("data-snap-scribd-total") || "0", 10);
+        let dmTotal = 0;
+        try {
+          if (typeof window !== "undefined" && window.docManager) {
+            dmTotal = window.docManager.pageCount || window.docManager.total_pages ||
+              (window.docManager.pages ? Object.keys(window.docManager.pages).length : 0) || 0;
           }
+        } catch (e) {}
+        const domTotal = document.querySelectorAll(".outer_page").length;
+        return Math.max(attrTotal, dmTotal, domTotal, 1);
+      };
 
-          // Chờ trang render xong .inner_page / .newpage (tối đa 4s cho mỗi trang)
-          let attempts = 0;
-          while (!pageEl.querySelector(".inner_page, .newpage") && attempts < 40) {
-            await new Promise(r => setTimeout(r, 100));
-            attempts++;
-            // Nếu chờ 2s mà chưa có, phát lại tín hiệu nạp riêng trang đó
-            if (attempts === 20) {
-              document.documentElement.setAttribute("data-snap-chunk-start", (i + 1).toString());
-              document.documentElement.setAttribute("data-snap-chunk-end", (i + 1).toString());
-              window.dispatchEvent(new CustomEvent("SNAP_SCRIBD_LOAD_CHUNK"));
+      let totalPages = getTotalPages();
+
+      // Khởi động nạp trước cụm trang đầu (1-3)
+      document.documentElement.setAttribute("data-snap-chunk-start", "1");
+      document.documentElement.setAttribute("data-snap-chunk-end", Math.min(totalPages, 3).toString());
+      window.dispatchEvent(new CustomEvent("SNAP_SCRIBD_LOAD_CHUNK"));
+
+      // Tuần tự quét và nạp từng trang từ 1 đến totalPages
+      for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        let pageEl = document.getElementById(`outer_page_${pageNum}`) ||
+                     document.querySelector(`.outer_page[data-page-number="${pageNum}"]`) ||
+                     document.querySelectorAll(".outer_page")[pageNum - 1] || null;
+
+        // Proactive chunk request cho trang hiện tại và 2 trang kế tiếp
+        const chunkEnd = Math.min(totalPages, pageNum + 2);
+        if (!pageEl || !pageEl.querySelector(".inner_page, .newpage")) {
+          document.documentElement.setAttribute("data-snap-chunk-start", pageNum.toString());
+          document.documentElement.setAttribute("data-snap-chunk-end", chunkEnd.toString());
+          window.dispatchEvent(new CustomEvent("SNAP_SCRIBD_LOAD_CHUNK"));
+        }
+
+        if (scroller && pageEl) {
+          scroller.scrollTop = pageEl.offsetTop;
+          scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+        }
+
+        // Chờ trang render xong .inner_page / .newpage (chờ tối đa 7.5s, kiểm tra mỗi 150ms)
+        let attempts = 0;
+        while ((!pageEl || !pageEl.querySelector(".inner_page, .newpage")) && attempts < 50) {
+          await new Promise(r => setTimeout(r, 150));
+          attempts++;
+          if (!pageEl) {
+            pageEl = document.getElementById(`outer_page_${pageNum}`) ||
+                     document.querySelector(`.outer_page[data-page-number="${pageNum}"]`) ||
+                     document.querySelectorAll(".outer_page")[pageNum - 1] || null;
+          }
+          if (attempts % 10 === 0) {
+            document.documentElement.setAttribute("data-snap-chunk-start", pageNum.toString());
+            document.documentElement.setAttribute("data-snap-chunk-end", chunkEnd.toString());
+            window.dispatchEvent(new CustomEvent("SNAP_SCRIBD_LOAD_CHUNK"));
+            if (scroller && pageEl) {
+              scroller.scrollTop = pageEl.offsetTop;
+              scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
             }
           }
+        }
 
+        if (pageEl) {
           // Đảm bảo trạng thái hiển thị của khung trang
           pageEl.classList.remove("not_visible", "blurred_page", "placeholder");
           pageEl.style.setProperty("display", "block", "important");
@@ -465,28 +573,35 @@
             if (orig && (!img.src || img.src === window.location.href || img.src.startsWith("data:"))) {
               let u = orig;
               if (u.startsWith("http://html.scribd.com/")) {
-                u = u.replace("http://html.scribdassets.com/", "https://html.scribdassets.com/");
+                u = u.replace("http://html.scribd.com/", "https://html.scribdassets.com/");
               }
               img.src = u;
             }
           });
 
-          // Chờ các ảnh hoàn tất nạp (tối đa 600ms)
+          // Chờ tất cả ảnh trên trang nạp xong thực sự (tối đa 3500ms)
           const pendingImgs = pageImgs.filter(img => !img.complete || img.naturalWidth === 0);
           if (pendingImgs.length > 0) {
             await Promise.all(pendingImgs.map(img => new Promise(res => {
+              if (img.complete && img.naturalWidth > 0) return res();
               img.addEventListener("load", res, { once: true });
               img.addEventListener("error", res, { once: true });
-              setTimeout(res, 600);
+              setTimeout(res, 3500);
             })));
           }
 
-          const pct = Math.round(((i + 1) / total) * 94);
-          if (UI) UI.updateProgress(`Đang quét nạp trang ${i + 1} / ${total}...`, pct);
+          // Dwell settling: Dành 150ms để layout và GPU paint hoàn chỉnh trước khi chuyển trang
+          await new Promise(r => setTimeout(r, 150));
         }
 
-        // Nhịp nghỉ ngắn giữa các nhóm
-        await new Promise(r => setTimeout(r, 80));
+        // Cập nhật lại totalPages nếu phát hiện số trang tăng lên trong quá trình cuộn
+        const currentTotal = getTotalPages();
+        if (currentTotal > totalPages) {
+          totalPages = currentTotal;
+        }
+
+        const pct = Math.round((pageNum / totalPages) * 90);
+        if (UI) UI.updateProgress(`Đang quét nạp trang ${pageNum} / ${totalPages}...`, pct);
       }
 
       // Cuộn chạm đáy cuối cùng để kích hoạt trang chót
@@ -495,6 +610,12 @@
         scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
       }
       await new Promise(resolve => setTimeout(resolve, 400));
+
+      // Đánh dấu trang cuối cùng để CSS không thêm trang trắng thừa
+      const allPages = Array.from(document.querySelectorAll(".outer_page"));
+      if (allPages.length > 0) {
+        allPages[allPages.length - 1].classList.add("snap-last-page");
+      }
     },
 
     // ── Xóa các element rác & dọn dẹp triệt để trùng lặp DOM ────────
@@ -511,26 +632,16 @@
         scroller.style.setProperty("position", "static", "important");
       }
 
-      // 3. Xóa các div overlay/toolbar/quảng cáo rác
-      document.querySelectorAll(".toolbar_drop").forEach(el => el.remove());
-      document.querySelectorAll(".mobile_overlay").forEach(el => el.remove());
-      document.querySelectorAll("#between_page_ads, .between_page_ads, .brand_header, .sticky_header, header, footer, .global_header, .bottom_actions, .related_docs, .document_cell, .ad_unit, .banner").forEach(el => el.remove());
+      // 3. Các div toolbar/overlay/quảng cáo được ẩn tự động và an toàn qua @media print
+      // mà không xóa cấu trúc live DOM của trang bằng JS để bảo toàn runtime của Scribd
 
-      // 4. Đảm bảo mỗi outer_page chỉ có đúng 1 .newpage duy nhất (chống trùng lặp text đè nhau)
+      // 4. Đảm bảo trạng thái hiển thị của outer_page và không can thiệp xóa node DOM .newpage
       const allOuterPages = Array.from(document.querySelectorAll(".outer_page"));
       allOuterPages.forEach((el, idx) => {
         el.classList.remove("not_visible", "blurred_page", "placeholder");
         el.style.setProperty("display", "block", "important");
         el.style.setProperty("visibility", "visible", "important");
         el.style.setProperty("opacity", "1", "important");
-
-        // Loại bỏ các thẻ .newpage dư thừa nếu trang bị render trùng
-        const newpages = el.querySelectorAll(".newpage");
-        if (newpages.length > 1) {
-          for (let k = 0; k < newpages.length - 1; k++) {
-            newpages[k].remove();
-          }
-        }
 
         if (idx === allOuterPages.length - 1) {
           el.classList.add("snap-last-page");
@@ -556,6 +667,67 @@
           img.src = u;
         }
       });
+    },
+
+    // ── Pass 2 Verification Barrier: Đảm bảo 100% trang, ảnh và font chữ đã nạp ──
+    async verifyAndFinalizeAllPages(UI) {
+      // 1. Kiểm tra rà soát toàn bộ các trang (Pass 2 Audit)
+      const allOuters = Array.from(document.querySelectorAll(".outer_page"));
+      const missingPages = [];
+      allOuters.forEach((el, idx) => {
+        if (!el.querySelector(".inner_page, .newpage")) {
+          missingPages.push(idx + 1);
+        }
+      });
+
+      if (missingPages.length > 0) {
+        console.warn(`[SnapDoc] Phát hiện ${missingPages.length} trang chưa render xong:`, missingPages);
+        if (UI) UI.updateProgress(`Đang hoàn thiện ${missingPages.length} trang chưa nạp đủ...`, 94);
+        for (const pNum of missingPages) {
+          document.documentElement.setAttribute("data-snap-chunk-start", pNum.toString());
+          document.documentElement.setAttribute("data-snap-chunk-end", pNum.toString());
+          window.dispatchEvent(new CustomEvent("SNAP_SCRIBD_LOAD_CHUNK"));
+        }
+        const waitMissingStart = Date.now();
+        while (Date.now() - waitMissingStart < 5000) {
+          await new Promise(r => setTimeout(r, 200));
+          const stillMissing = allOuters.filter(el => !el.querySelector(".inner_page, .newpage"));
+          if (stillMissing.length === 0) break;
+        }
+      }
+
+      // 2. Ép nạp và đợi toàn bộ ảnh trong document hoàn tất
+      const allImgs = Array.from(document.querySelectorAll(".outer_page img"));
+      allImgs.forEach(img => {
+        img.style.setProperty("display", "block", "important");
+        img.style.setProperty("visibility", "visible", "important");
+        const orig = img.getAttribute("orig") || img.getAttribute("data-orig") || img.getAttribute("data-src");
+        if (orig && (!img.src || img.src === window.location.href || img.src.startsWith("data:"))) {
+          let u = orig;
+          if (u.startsWith("http://html.scribd.com/")) {
+            u = u.replace("http://html.scribd.com/", "https://html.scribdassets.com/");
+          }
+          img.src = u;
+        }
+      });
+
+      const pendingImgs = allImgs.filter(img => !img.complete || img.naturalWidth === 0);
+      if (pendingImgs.length > 0) {
+        if (UI) UI.updateProgress(`Đang hoàn tất nạp ${pendingImgs.length} ảnh chất lượng cao...`, 97);
+        await Promise.all(pendingImgs.map(img => new Promise(res => {
+          if (img.complete && img.naturalWidth > 0) return res();
+          img.addEventListener("load", res, { once: true });
+          img.addEventListener("error", res, { once: true });
+          setTimeout(res, 4000);
+        })));
+      }
+
+      // 3. Đợi toàn bộ Fonts của document tải xong
+      if (document.fonts && document.fonts.ready) {
+        try {
+          await document.fonts.ready;
+        } catch (e) {}
+      }
     }
   };
 })();

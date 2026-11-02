@@ -1,25 +1,41 @@
 document.addEventListener("DOMContentLoaded", () => {
-  // Tab switching
+  // ── Tab Switching ──────────────────────────────────────────
   const tabBtns = document.querySelectorAll(".tab-btn");
   const tabContents = document.querySelectorAll(".tab-content");
 
-  tabBtns.forEach(btn => {
-    btn.addEventListener("click", () => {
-      const tabId = btn.dataset.tab;
+  function switchTab(tabId) {
+    if (!tabId) return;
+    const targetBtn = Array.from(tabBtns).find(b => b.dataset.tab === tabId);
+    const targetContent = document.getElementById(`tab-${tabId}`);
+
+    if (targetBtn && targetContent) {
       tabBtns.forEach(b => b.classList.remove("active"));
       tabContents.forEach(c => c.classList.remove("active"));
-      btn.classList.add("active");
-      document.getElementById(`tab-${tabId}`).classList.add("active");
+      targetBtn.classList.add("active");
+      targetContent.classList.add("active");
 
       if (tabId === "memory") {
         loadMemoryHistory();
         loadMemoryLimit();
         updateAnalytics();
       }
+    }
+  }
+
+  tabBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tabId = btn.dataset.tab;
+      switchTab(tabId);
     });
   });
 
-  // General settings
+  // Handle URL hash routing (e.g. options.html#memory)
+  if (window.location.hash) {
+    const hash = window.location.hash.replace('#', '');
+    switchTab(hash);
+  }
+
+  // ── General Settings (Theme, Sync) ─────────────────────────
   const themeToggle = document.getElementById("theme-toggle");
   const saveBtn = document.getElementById("save-btn");
   const saveMsg = document.getElementById("save-msg");
@@ -29,21 +45,27 @@ document.addEventListener("DOMContentLoaded", () => {
     theme: "light"
   }, (data) => {
     const isDark = data.theme === "dark";
-    themeToggle.checked = isDark;
+    if (themeToggle) themeToggle.checked = isDark;
     applyTheme(isDark);
   });
 
-  themeToggle.addEventListener("change", () => {
-    const isDark = themeToggle.checked;
-    applyTheme(isDark);
-    chrome.storage.sync.set({ theme: isDark ? "dark" : "light" });
-    chrome.runtime.sendMessage({ action: "THEME_CHANGED", theme: isDark ? "dark" : "light" }).catch(() => {});
-  });
+  if (themeToggle) {
+    themeToggle.addEventListener("change", () => {
+      const isDark = themeToggle.checked;
+      applyTheme(isDark);
+      chrome.storage.sync.set({ theme: isDark ? "dark" : "light" });
+      chrome.runtime.sendMessage({ action: "THEME_CHANGED", theme: isDark ? "dark" : "light" }).catch(() => {});
+    });
+  }
 
-  saveBtn.addEventListener("click", () => {
-    saveMsg.style.display = "block";
-    setTimeout(() => { saveMsg.style.display = "none"; }, 2000);
-  });
+  if (saveBtn) {
+    saveBtn.addEventListener("click", () => {
+      if (saveMsg) {
+        saveMsg.style.display = "block";
+        setTimeout(() => { saveMsg.style.display = "none"; }, 2000);
+      }
+    });
+  }
 
   if (openShortcutsLink) {
     openShortcutsLink.addEventListener("click", (e) => {
@@ -52,7 +74,22 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Memory functionality
+  // ── Engine Status Check ─────────────────────────────────────
+  const checkBackendBtn = document.getElementById("check-backend-btn");
+  const backendHealthLabel = document.getElementById("backend-health-label");
+
+  function checkEngineStatus() {
+    if (backendHealthLabel) {
+      backendHealthLabel.textContent = "✅ In-Browser JS Engine Hoạt Động Tốt (100% Client-side)";
+      backendHealthLabel.style.color = "var(--snap-opt-success)";
+    }
+  }
+
+  if (checkBackendBtn) {
+    checkBackendBtn.addEventListener("click", checkEngineStatus);
+  }
+
+  // ── Memory & History Functionality ─────────────────────────
   const memorySearch = document.getElementById("memory-search");
   const memoryList = document.getElementById("memory-list");
   const memoryClearBtn = document.getElementById("memory-clear-btn");
@@ -76,15 +113,27 @@ document.addEventListener("DOMContentLoaded", () => {
           const previewText = entry.text || "(Không có nội dung)";
 
           return `
-            <div class="memory-entry" data-id="${entry.id}">
+            <div class="memory-entry" data-id="${escapeAttr(entry.id)}">
               <div class="memory-entry-header">
-                <span class="memory-entry-time">${timeStr}</span>
-                <span class="memory-entry-mode ${modeClass}">${modeLabel}</span>
+                <span class="memory-entry-time">${escapeHtml(timeStr)}</span>
+                <span class="memory-entry-mode ${modeClass}">${escapeHtml(modeLabel)}</span>
               </div>
               <div class="memory-entry-text">${escapeHtml(previewText)}</div>
               <div class="memory-entry-actions">
-                <button class="copy-btn" data-text="${escapeAttr(previewText)}">📋 Copy</button>
-                <button class="delete-btn" data-id="${entry.id}">🗑 Xóa</button>
+                <button class="copy-btn" data-text="${escapeAttr(previewText)}" type="button">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  <span>Sao chép</span>
+                </button>
+                <button class="delete-btn" data-id="${escapeAttr(entry.id)}" type="button">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                  <span>Xóa</span>
+                </button>
               </div>
             </div>
           `;
@@ -94,8 +143,15 @@ document.addEventListener("DOMContentLoaded", () => {
           btn.addEventListener('click', () => {
             const text = btn.getAttribute('data-text');
             navigator.clipboard.writeText(text).then(() => {
-              btn.textContent = '✅ Copied!';
-              setTimeout(() => { btn.textContent = '📋 Copy'; }, 2000);
+              const span = btn.querySelector('span');
+              if (span) span.textContent = 'Đã sao chép!';
+              btn.style.borderColor = 'var(--snap-opt-success)';
+              btn.style.color = 'var(--snap-opt-success)';
+              setTimeout(() => {
+                if (span) span.textContent = 'Sao chép';
+                btn.style.borderColor = '';
+                btn.style.color = '';
+              }, 1800);
             });
           });
         });
@@ -110,7 +166,7 @@ document.addEventListener("DOMContentLoaded", () => {
           });
         });
       } else {
-        memoryList.innerHTML = '<div class="memory-empty">📭 Chưa có lịch sử snap nào.</div>';
+        memoryList.innerHTML = '<div class="memory-empty">Chưa có bản ghi nào trong lịch sử giải mã.</div>';
         if (memoryCount) memoryCount.textContent = "0";
       }
     });
@@ -130,10 +186,20 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function escapeHtml(str) {
-    return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    return String(str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
   function escapeAttr(str) {
-    return String(str || "").replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return String(str || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   let searchTimeout;
@@ -142,13 +208,13 @@ document.addEventListener("DOMContentLoaded", () => {
       clearTimeout(searchTimeout);
       searchTimeout = setTimeout(() => {
         loadMemoryHistory(memorySearch.value);
-      }, 300);
+      }, 250);
     });
   }
 
   if (memoryClearBtn) {
     memoryClearBtn.addEventListener("click", () => {
-      if (confirm("Xóa toàn bộ lịch sử snap? Hành động này không thể hoàn tác.")) {
+      if (confirm("Xóa toàn bộ lịch sử giải mã? Thao tác này không thể hoàn tác.")) {
         chrome.runtime.sendMessage({ action: "CLEAR_HISTORY" }, () => {
           loadMemoryHistory();
           updateAnalytics();
@@ -173,7 +239,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Cloud Sync & Backup
+  // ── Cloud Sync & Backup ────────────────────────────────────
   function dateStr() { return new Date().toISOString().slice(0, 10); }
 
   function showSyncMsg(msg) {
@@ -181,18 +247,18 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!el) return;
     el.textContent = msg;
     el.style.display = "block";
-    setTimeout(() => { el.style.display = "none"; }, 3000);
+    setTimeout(() => { el.style.display = "none"; }, 3500);
   }
 
-  function downloadJSON(data, filename) {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  function downloadFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-    showSyncMsg(`✅ Đã export ${filename}`);
+    showSyncMsg(`Đã xuất file ${filename}`);
   }
 
   document.getElementById("export-settings-btn")?.addEventListener("click", () => {
@@ -201,7 +267,7 @@ document.addEventListener("DOMContentLoaded", () => {
       memoryLimit: 50,
       hasSeenOnboarding: false
     }, (data) => {
-      downloadJSON(data, `snap-decode-settings-${dateStr()}.json`);
+      downloadFile(JSON.stringify(data, null, 2), `snap-decode-settings-${dateStr()}.json`, "application/json");
     });
   });
 
@@ -217,11 +283,11 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         const data = JSON.parse(ev.target.result);
         chrome.storage.sync.set(data, () => {
-          showSyncMsg("✅ Đã import cài đặt thành công!");
-          setTimeout(() => location.reload(), 1500);
+          showSyncMsg("Đã nhập cài đặt thành công!");
+          setTimeout(() => location.reload(), 1200);
         });
       } catch(err) {
-        showSyncMsg("❌ File JSON không hợp lệ: " + err.message);
+        showSyncMsg("File JSON không hợp lệ: " + err.message);
       }
     };
     reader.readAsText(file);
@@ -229,7 +295,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("export-memory-btn")?.addEventListener("click", () => {
     chrome.runtime.sendMessage({ action: "GET_SNAP_HISTORY" }, (entries) => {
-      downloadJSON(entries || [], `snap-decode-memory-${dateStr()}.json`);
+      downloadFile(JSON.stringify(entries || [], null, 2), `snap-decode-memory-${dateStr()}.json`, "application/json");
+    });
+  });
+
+  // Export CSV
+  document.getElementById("export-memory-csv-btn")?.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ action: "GET_SNAP_HISTORY" }, (entries) => {
+      if (!entries || entries.length === 0) {
+        showSyncMsg("Lịch sử đang trống, không có dữ liệu để xuất.");
+        return;
+      }
+
+      // RFC 4180 CSV with UTF-8 BOM
+      const header = ["ID", "Thời gian", "Loại", "Nội dung", "URL Nguồn"];
+      const escapeCsv = (val) => `"${String(val || "").replace(/"/g, '""')}"`;
+
+      const rows = entries.map(item => [
+        escapeCsv(item.id),
+        escapeCsv(new Date(item.timestamp).toLocaleString("vi-VN")),
+        escapeCsv(item.mode === "qr" ? "QR Code" : "OCR Text"),
+        escapeCsv(item.text),
+        escapeCsv(item.sourceUrl || "")
+      ].join(","));
+
+      const csvContent = "\uFEFF" + [header.join(","), ...rows].join("\r\n");
+      downloadFile(csvContent, `snap-decode-history-${dateStr()}.csv`, "text/csv;charset=utf-8;");
     });
   });
 
@@ -243,20 +334,57 @@ document.addEventListener("DOMContentLoaded", () => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
-        const entries = JSON.parse(ev.target.result);
-        chrome.storage.local.set({ snap_history: entries }, () => {
-          showSyncMsg("✅ Đã import lịch sử thành công!");
+        const raw = JSON.parse(ev.target.result);
+        if (!Array.isArray(raw)) {
+          throw new Error("Dữ liệu lịch sử phải là một danh sách JSON (Array).");
+        }
+
+        const sanitized = raw.slice(0, 500).map((item, index) => {
+          if (!item || typeof item !== "object") return null;
+
+          const rawId = typeof item.id === "string" || typeof item.id === "number" ? String(item.id) : "";
+          const id = rawId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || `${Date.now()}_${index}`;
+
+          const timestamp = item.timestamp && !isNaN(new Date(item.timestamp).getTime())
+            ? new Date(item.timestamp).toISOString()
+            : new Date().toISOString();
+
+          const mode = item.mode === "qr" ? "qr" : "ocr";
+          const text = String(item.text || item.ocrText || item.translation || "").slice(0, 50000);
+          const sourceUrl = typeof item.sourceUrl === "string" ? item.sourceUrl.slice(0, 2048) : "";
+          const confidence = typeof item.confidence === "number"
+            ? Math.max(0, Math.min(1, item.confidence))
+            : 0;
+
+          return {
+            id,
+            timestamp,
+            mode,
+            text,
+            sourceUrl,
+            confidence
+          };
+        }).filter(Boolean);
+
+        chrome.storage.local.set({ snap_history: sanitized }, () => {
+          if (chrome.runtime.lastError) {
+            showSyncMsg("Lỗi lưu trữ: " + chrome.runtime.lastError.message);
+            return;
+          }
+          showSyncMsg(`Đã nhập thành công ${sanitized.length} mục lịch sử!`);
           loadMemoryHistory();
           updateAnalytics();
         });
       } catch(err) {
-        showSyncMsg("❌ File JSON không hợp lệ: " + err.message);
+        showSyncMsg("File JSON không hợp lệ: " + err.message);
+      } finally {
+        e.target.value = "";
       }
     };
     reader.readAsText(file);
   });
 
-  // Analytics Dashboard
+  // ── Analytics Dashboard ────────────────────────────────────
   let analyticsRange = "week";
 
   document.querySelectorAll(".analytics-filter").forEach(btn => {

@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Snap Decode - QR & DocUnlocker",
-  "version": "2.2.0",
-  "description": "Giải mã QR Code và Mở khóa tải tài liệu Scribd, Studocu, SlideShare.",
+  "version": "2.3.0",
+  "description": "Giải mã QR Code và Mở khóa tải tài liệu Scribd, Studocu, SlideShare, SlideServe.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnNoxxVHMtaXDh5slqswSXBUwHab0io04juKI/MQ0owdUwUGNgPU8JQE4QCM/siyOjr4BdKtv32PYmBI961arq440vXRWcS4BzYcMoB1xFu6y+O3Rw5EW9SYQS/oj2vL7bcS/82PRD8xOV2KUsj3wQ9Yej32UcOgye8oyqmxTlqXhYU5X1RfjURnovmlcXwbFn7JMLaNLi/Lw0IYqfZC1cGKobRxE4omAtRrsrm5VEdLNJcpGN63LdNYRdSZJEUCRDIr3PtflVl7eRre7SkvnhL4JN3liDcURtle7j9utBaytvM0hD0yY3hqBZe4bvqreQrp+u3P9rlqgZwoJBHnfZQIDAQAB",
   "icons": {
+    "16": "assets/icon.png",
     "48": "assets/icon.png",
     "128": "assets/icon.png"
   },
@@ -20,10 +21,10 @@
     "activeTab",
     "scripting",
     "storage",
+    "unlimitedStorage",
     "commands",
     "tabs",
-    "notifications",
-    "nativeMessaging"
+    "notifications"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -40,17 +41,25 @@
   "content_scripts": [
     {
       "matches": [
+        "*://scribd.com/*",
         "*://*.scribd.com/*",
+        "*://studocu.com/*",
         "*://*.studocu.com/*",
-        "*://*.studocu.vn/*",
         "*://studocu.vn/*",
-        "*://*.slideshare.net/*"
+        "*://*.studocu.vn/*",
+        "*://studeersnel.nl/*",
+        "*://*.studeersnel.nl/*",
+        "*://slideshare.net/*",
+        "*://*.slideshare.net/*",
+        "*://slideserve.com/*",
+        "*://*.slideserve.com/*"
       ],
       "js": [
         "js/doc-unlocker/ui-overlay.js",
         "js/doc-unlocker/providers/scribd.js",
         "js/doc-unlocker/providers/studocu.js",
         "js/doc-unlocker/providers/slideshare.js",
+        "js/doc-unlocker/providers/slideserve.js",
         "js/doc-unlocker/index.js",
         "js/doc-inject.js"
       ],
@@ -61,7 +70,10 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "css/content.css"
+        "css/content.css",
+        "assets/icon.png",
+        "js/lib/jsqr.js",
+        "js/modules/qr-decoder.js"
       ],
       "matches": [
         "<all_urls>"

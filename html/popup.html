@@ -3,39 +3,134 @@
 
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Snap Decode</title>
   <link rel="stylesheet" href="../css/popup.css">
 </head>
 
 <body>
   <div class="popup-container">
-    <div class="header">
-      <img src="../assets/icon.png" alt="Logo" class="logo">
-      <div class="title-box">
-        <h1>Snap Decode</h1>
-        <p class="subtitle">Đọc QR & Tải tài liệu</p>
+    <!-- Top Bar / Header -->
+    <header class="header">
+      <div class="brand">
+        <div class="logo-wrapper">
+          <img src="../assets/icon.png" alt="Snap Decode" class="logo">
+        </div>
+        <div class="brand-text">
+          <div class="brand-title">
+            <h1>Snap Decode</h1>
+            <span class="version-badge">v2.3</span>
+          </div>
+          <p class="subtitle">Trích xuất QR & Mở khóa tài liệu</p>
+        </div>
       </div>
       <div class="header-actions">
-        <button id="guide-btn" class="header-icon-btn" title="Hướng dẫn">📖</button>
-        <button id="options-btn" class="header-icon-btn" title="Cài đặt">⚙️</button>
+        <button id="guide-btn" class="header-icon-btn" title="Hướng dẫn sử dụng" aria-label="Hướng dẫn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+          </svg>
+        </button>
+        <button id="options-btn" class="header-icon-btn" title="Cài đặt & Lịch sử" aria-label="Cài đặt">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Backend Status Bar -->
+    <div class="status-bar" id="backend-status-container">
+      <div class="status-indicator">
+        <span class="status-dot" id="server-status-dot"></span>
+        <span class="status-text" id="server-status">Sẵn sàng (In-Browser Engine)</span>
+      </div>
+      <span class="status-mode" id="server-mode-badge">Client-side JS</span>
+    </div>
+
+    <!-- Main Actions -->
+    <div class="action-section">
+      <!-- HERO SCAN BUTTON (The Chanel Rule: The ONE focal element) -->
+      <button id="snap-qr-btn" class="hero-action-btn" type="button">
+        <div class="hero-btn-content">
+          <div class="hero-icon-container">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+              <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+              <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+              <path d="M3 17v2a2 2 0 0 0 2 2h2"></path>
+              <rect x="7" y="7" width="10" height="10" rx="1"></rect>
+              <path d="M10 12h4"></path>
+            </svg>
+          </div>
+          <div class="hero-text-container">
+            <span class="hero-title">Quét mã QR màn hình</span>
+            <span class="hero-desc">Kéo chọn vùng QR trên bất kỳ tab nào</span>
+          </div>
+        </div>
+        <div class="shortcut-tag">
+          <kbd>Alt</kbd>+<kbd>X</kbd>
+        </div>
+      </button>
+
+      <!-- SECONDARY ACTION: DOC UNLOCKER -->
+      <button id="docs-download-btn" class="secondary-action-card" type="button">
+        <div class="card-icon-container">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+        </div>
+        <div class="card-body">
+          <span class="card-title">Mở khóa & Tải tài liệu</span>
+          <span class="card-supported">Scribd • StuDocu • SlideShare • SlideServe</span>
+        </div>
+        <div class="card-chevron">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </div>
+      </button>
+    </div>
+
+    <!-- RECENT SNAP SNIPPET (Productivity & Quick Workflow) -->
+    <div class="recent-section">
+      <div class="recent-header">
+        <span class="recent-label">Lần quét gần nhất</span>
+        <a href="#" id="view-all-history" class="view-history-link">Xem tất cả</a>
+      </div>
+      
+      <div id="recent-snap-card" class="recent-card">
+        <div id="recent-snap-empty" class="recent-empty">
+          <span>Chưa có lần quét nào gần đây</span>
+        </div>
+        <div id="recent-snap-content" class="recent-content" style="display: none;">
+          <div class="recent-meta">
+            <span class="recent-badge" id="recent-badge">QR Code</span>
+            <span class="recent-time" id="recent-time">Vừa xong</span>
+          </div>
+          <div class="recent-text" id="recent-text"></div>
+          <div class="recent-actions">
+            <button id="recent-copy-btn" class="recent-copy-btn" type="button">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span id="recent-copy-text">Sao chép</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="action-grid">
-      <button id="snap-qr-btn" class="main-action-btn" style="background-color: #0f9d58;">
-        <span class="icon">📷</span>
-        <span class="text">Quét QR</span>
-      </button>
-
-      <button id="docs-download-btn" class="main-action-btn" style="background-color: #1a73e8;">
-        <span class="icon">📄</span>
-        <span class="text">Tải Tài Liệu</span>
-      </button>
-    </div>
-
-    <div class="footer">
-      <span>Hỗ trợ: Scribd/Studocu/SlideShare</span>
-    </div>
+    <!-- Minimalist Footer -->
+    <footer class="footer">
+      <span class="footer-tip">Hỗ trợ: Scribd • StuDocu • SlideShare • SlideServe</span>
+    </footer>
   </div>
 
   <script src="../js/popup.js"></script>

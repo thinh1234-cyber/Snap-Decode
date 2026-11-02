@@ -7,7 +7,8 @@
   const providers = [
     window.__SnapDocScribd,
     window.__SnapDocStudocu,
-    window.__SnapDocSlideShare
+    window.__SnapDocSlideShare,
+    window.__SnapDocSlideServe
   ].filter(Boolean);
 
   window.__SnapDocRouter = {
@@ -21,7 +22,7 @@
       if (provider) {
         provider.execute(window.__SnapDocUI);
       } else {
-        alert("Trang hiện tại không thuộc danh sách hỗ trợ (Scribd, StuDocu, SlideShare)!");
+        alert("Trang hiện tại không thuộc danh sách hỗ trợ (Scribd, StuDocu, SlideShare, SlideServe)!");
       }
     },
 
@@ -34,13 +35,41 @@
         this.dispatch();
       });
 
-      // 2. Check auto-download trigger
+      // 2. Check auto-download trigger (safe polling mechanism replaces fixed setTimeout)
       if (window.location.hash.includes("snap_autodownload=1")) {
-        const runAuto = () => setTimeout(() => this.dispatch(), 1200);
+        const waitForReadyAndDispatch = () => {
+          const startTime = Date.now();
+          const maxWaitMs = 12000;
+          const pollInterval = 150;
+
+          const checkReady = () => {
+            // Check core container/page readiness for Scribd (.outer_page, .newpage, #outer_page_1 or docManager has data),
+            // StuDocu (#page-container, .pf), SlideShare, or SlideServe (#player, #tscript, .ss-header-wrapper)
+            const isScribdReady = !!(
+              document.querySelector(".outer_page, .newpage, #outer_page_1") ||
+              (typeof window !== "undefined" && window.docManager && (window.docManager.pageCount || (window.docManager.pages && Object.keys(window.docManager.pages).length > 0))) ||
+              document.documentElement.getAttribute("data-snap-scribd-total")
+            );
+            const isStudocuReady = !!document.querySelector("#page-container, [data-page-index], .pf, .p2hv");
+            const isSlideShareReady = !!document.querySelector("#__NEXT_DATA__, [data-testid='total-slides'], img[data-testid*='slide'], .slide");
+            const isSlideServeReady = !!document.querySelector("#player, #tscript, .ss-header-wrapper");
+
+            const isReady = isScribdReady || isStudocuReady || isSlideShareReady || isSlideServeReady;
+
+            if (isReady || (Date.now() - startTime) >= maxWaitMs) {
+              this.dispatch();
+            } else {
+              setTimeout(checkReady, pollInterval);
+            }
+          };
+
+          checkReady();
+        };
+
         if (document.readyState === "complete" || document.readyState === "interactive") {
-          runAuto();
+          waitForReadyAndDispatch();
         } else {
-          window.addEventListener("DOMContentLoaded", runAuto);
+          window.addEventListener("DOMContentLoaded", waitForReadyAndDispatch);
         }
       }
     }

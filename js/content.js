@@ -126,6 +126,7 @@
   }
 
   function removeOverlay() {
+    isSnapping = false;
     if (overlay) {
       overlay.remove();
       overlay = null;
@@ -165,54 +166,57 @@
   function cropAndDispatchToBackend(dataUrl, rect) {
     const img = new Image();
     img.onload = async () => {
-      // Tỷ lệ scale thực giữa bitmap chụp và viewport
-      const scaleX = img.naturalWidth / window.innerWidth;
-      const scaleY = img.naturalHeight / window.innerHeight;
+      // Tỷ lệ scale thực giữa bitmap chụp và viewport (sử dụng clientWidth/clientHeight để tránh dính thanh cuộn)
+      const clientWidth = document.documentElement.clientWidth || window.innerWidth;
+      const clientHeight = document.documentElement.clientHeight || window.innerHeight;
 
-      const cropX = Math.round(rect.left * scaleX);
-      const cropY = Math.round(rect.top * scaleY);
-      const cropWidth = Math.round(rect.width * scaleX);
-      const cropHeight = Math.round(rect.height * scaleY);
+      const scaleX = img.naturalWidth / clientWidth;
+      const scaleY = img.naturalHeight / clientHeight;
+
+      const rawX = Math.round(rect.left * scaleX);
+      const rawY = Math.round(rect.top * scaleY);
+      const rawW = Math.round(rect.width * scaleX);
+      const rawH = Math.round(rect.height * scaleY);
+
+      // Clamp tọa độ bảo đảm không âm và không vượt quá kích thước bitmap ảnh gốc
+      const cropX = Math.max(0, Math.min(rawX, img.naturalWidth - 1));
+      const cropY = Math.max(0, Math.min(rawY, img.naturalHeight - 1));
+      const cropWidth = Math.max(1, Math.min(rawW, img.naturalWidth - cropX));
+      const cropHeight = Math.max(1, Math.min(rawH, img.naturalHeight - cropY));
 
       const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, cropWidth);
-      canvas.height = Math.max(1, cropHeight);
+      canvas.width = cropWidth;
+      canvas.height = cropHeight;
       const ctx = canvas.getContext("2d");
       ctx.drawImage(img, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
 
       const croppedDataUrl = canvas.toDataURL("image/png");
 
-      chrome.runtime.sendMessage({
-        action: "DECODE_IMAGE",
-        mode: currentSnapMode,
-        image: croppedDataUrl
-      }, (data) => {
-        if (!data) {
-          updatePopupError("Không nhận được phản hồi từ backend.", true);
-          return;
-        }
+      // 1. Client-side In-Browser Fast Decode via SnapQRDecoder (15-40ms)
+      if (currentSnapMode === "qr" && window.SnapQRDecoder) {
+        try {
+          const clientResult = window.SnapQRDecoder.decodeFromCanvas(canvas);
+          if (clientResult && clientResult.success && clientResult.text) {
+            const decodedText = clientResult.text.trim();
+            chrome.runtime.sendMessage({
+              action: "SAVE_SNAP",
+              entry: {
+                mode: currentSnapMode,
+                text: decodedText,
+                sourceUrl: window.location.href
+              }
+            });
 
-        if (data.success) {
-          const decodedText = data.text ? data.text.trim() : "";
-          if (!decodedText) {
-            updatePopupError("Không phát hiện được nội dung nào trong vùng chọn.", true);
+            updatePopupResult(currentSnapMode, decodedText, croppedDataUrl, clientResult.elapsedMs);
             return;
           }
-
-          chrome.runtime.sendMessage({
-            action: "SAVE_SNAP",
-            entry: {
-              mode: currentSnapMode,
-              text: decodedText,
-              sourceUrl: window.location.href
-            }
-          });
-
-          updatePopupResult(currentSnapMode, decodedText, croppedDataUrl, data.elapsedMs);
-        } else {
-          updatePopupError(data.error || "Không thể xử lý hình ảnh.", true);
+        } catch (err) {
+          console.warn("[SnapDecode] Client-side QR decode error:", err);
         }
-      });
+      }
+
+      // 2. Không phát hiện được mã QR trong vùng chọn
+      updatePopupError("Không phát hiện được mã QR hợp lệ trong vùng chọn. Hãy thử kéo chọn rộng hơn hoặc rõ nét hơn nhé!", true);
     };
     img.src = dataUrl;
   }
@@ -234,9 +238,13 @@
     header.className = "snap-translate-header";
     header.innerHTML = `
       <div style="display:flex; align-items:center; gap:8px;">
-        <span id="snap-guide-btn" title="Hướng dẫn sử dụng" style="cursor:pointer; opacity:0.85; font-size:16px;">📖</span>
-        <span id="snap-settings-btn" title="Mở trang Cài đặt" style="cursor:pointer; opacity:0.85; font-size:16px;">⚙️</span>
-        <span style="font-weight:600; font-size:14px; letter-spacing:0.2px;">Snap Decode</span>
+        <span id="snap-guide-btn" title="Hướng dẫn sử dụng" style="cursor:pointer; display:flex; align-items:center; color:var(--snap-text-secondary); opacity:0.9;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+        </span>
+        <span id="snap-settings-btn" title="Mở trang Cài đặt" style="cursor:pointer; display:flex; align-items:center; color:var(--snap-text-secondary); opacity:0.9;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </span>
+        <span style="font-weight:600; font-size:13.5px; letter-spacing:-0.01em;">Snap Decode</span>
       </div>
       <button id="snap-decode-close" class="snap-translate-close" title="Đóng">&times;</button>
     `;
@@ -295,56 +303,59 @@
     const content = document.getElementById("snap-decode-content");
     if (!content) return;
 
-    const labelTitle = "NỘI DUNG MÃ QR:";
-    const modeBadge = "📷 QR Code (OpenCV / ZBar)";
-    const badgeBg = "rgba(15, 157, 88, 0.12)";
-    const badgeColor = "var(--snap-success, #0f9d58)";
+    const labelTitle = "Nội dung mã QR";
+    const modeBadge = "QR Code • Engine";
+    const badgeBg = "rgba(16, 185, 129, 0.12)";
+    const badgeColor = "var(--snap-success, #10b981)";
 
     const charCount = decodedText.length;
     const wordCount = decodedText.split(/\s+/).filter(Boolean).length;
-    const speedText = elapsedMs !== undefined ? ` • ⚡ ${elapsedMs}ms` : "";
+    const speedText = elapsedMs !== undefined ? ` • ${elapsedMs}ms` : "";
     const statsText = `${charCount} ký tự • ${wordCount} từ${speedText}`;
 
     let safeText = escapeHtml(decodedText);
     const urlRegex = /(https?:\/\/[^\s]+)/g;
-    safeText = safeText.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: var(--snap-link, #1a73e8); text-decoration: underline; word-break: break-all;">$1</a>');
+    safeText = safeText.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: var(--snap-link, #2563eb); text-decoration: underline; word-break: break-all;">$1</a>');
 
     content.innerHTML = `
       <div class="snap-translate-section">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
           <span class="snap-translate-label" style="margin-bottom:0;">${labelTitle}</span>
-          <span style="font-size:11px; font-weight:600; padding:2px 8px; border-radius:12px; background:${badgeBg}; color:${badgeColor};">${modeBadge}</span>
+          <span style="font-size:10.5px; font-weight:600; padding:2px 7px; border-radius:4px; background:${badgeBg}; color:${badgeColor}; font-family:ui-monospace, monospace;">${modeBadge}</span>
         </div>
         <div class="snap-translate-text" style="white-space: pre-wrap; max-height:260px; overflow-y:auto; user-select:text;">${safeText}</div>
-        <div style="margin-top:6px; font-size:11px; color:var(--snap-text-secondary, #5f6368); text-align:right;">${statsText}</div>
+        <div style="margin-top:6px; font-size:11px; color:var(--snap-text-secondary, #64748b); text-align:right;">${statsText}</div>
       </div>
 
       <div style="display:flex; justify-content:center; gap:8px; margin-top:14px;">
-        <button id="snap-copy-btn" style="
-          background: var(--snap-primary, #1a73e8); color: white;
-          border: none; padding: 8px 16px; border-radius: 6px;
-          cursor: pointer; font-size: 13px; font-weight: 500;
-          display: inline-flex; align-items: center; gap: 6px; transition: 0.2s;
+        <button id="snap-copy-btn" type="button" style="
+          background: var(--snap-primary, #2563eb); color: white;
+          border: none; padding: 7px 14px; border-radius: 6px;
+          cursor: pointer; font-size: 12.5px; font-weight: 500;
+          display: inline-flex; align-items: center; gap: 6px; transition: 0.15s;
         ">
-          <span>📋</span> Copy
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          <span id="snap-copy-label">Sao chép</span>
         </button>
 
-        <button id="snap-export-btn" style="
-          background: var(--snap-bg-secondary, #f1f3f4); color: var(--snap-text, #3c4043);
-          border: 1px solid var(--snap-border, #dadce0); padding: 8px 14px;
-          border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;
-          display: inline-flex; align-items: center; gap: 6px; transition: 0.2s;
+        <button id="snap-export-btn" type="button" style="
+          background: var(--snap-bg-secondary, #f8fafc); color: var(--snap-text, #0f172a);
+          border: 1px solid var(--snap-border, #e2e8f0); padding: 7px 12px;
+          border-radius: 6px; cursor: pointer; font-size: 12.5px; font-weight: 500;
+          display: inline-flex; align-items: center; gap: 6px; transition: 0.15s;
         ">
-          <span>📤</span> Export .txt
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <span id="snap-export-label">Xuất .txt</span>
         </button>
 
-        <button id="snap-resnap-btn" style="
-          background: var(--snap-bg-secondary, #f1f3f4); color: var(--snap-text, #3c4043);
-          border: 1px solid var(--snap-border, #dadce0); padding: 8px 14px;
-          border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;
-          display: inline-flex; align-items: center; gap: 6px; transition: 0.2s;
+        <button id="snap-resnap-btn" type="button" style="
+          background: var(--snap-bg-secondary, #f8fafc); color: var(--snap-text, #0f172a);
+          border: 1px solid var(--snap-border, #e2e8f0); padding: 7px 12px;
+          border-radius: 6px; cursor: pointer; font-size: 12.5px; font-weight: 500;
+          display: inline-flex; align-items: center; gap: 6px; transition: 0.15s;
         ">
-          <span>🔄</span> Resnap
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          <span>Quét lại</span>
         </button>
       </div>
     `;
@@ -352,9 +363,9 @@
     // Copy Event
     document.getElementById("snap-copy-btn").addEventListener("click", () => {
       navigator.clipboard.writeText(decodedText).then(() => {
-        const btn = document.getElementById("snap-copy-btn");
-        btn.innerHTML = '<span>✅</span> Đã Copy!';
-        setTimeout(() => { btn.innerHTML = '<span>📋</span> Copy'; }, 2000);
+        const label = document.getElementById("snap-copy-label");
+        if (label) label.textContent = 'Đã sao chép!';
+        setTimeout(() => { if (label) label.textContent = 'Sao chép'; }, 1800);
       }).catch(() => {
         const ta = document.createElement('textarea');
         ta.value = decodedText;
@@ -362,16 +373,16 @@
         ta.select();
         document.execCommand('copy');
         document.body.removeChild(ta);
-        const btn = document.getElementById("snap-copy-btn");
-        btn.innerHTML = '<span>✅</span> Đã Copy!';
-        setTimeout(() => { btn.innerHTML = '<span>📋</span> Copy'; }, 2000);
+        const label = document.getElementById("snap-copy-label");
+        if (label) label.textContent = 'Đã sao chép!';
+        setTimeout(() => { if (label) label.textContent = 'Sao chép'; }, 1800);
       });
     });
 
     // Export Event
     document.getElementById("snap-export-btn").addEventListener("click", () => {
       const timestamp = new Date().toLocaleString('vi-VN');
-      const headerTag = isQR ? "MÃ QR" : "VĂN BẢN TRÍCH XUẤT OCR";
+      const headerTag = currentSnapMode === "qr" ? "MÃ QR" : "VĂN BẢN TRÍCH XUẤT OCR";
       const exportContent = `=== Snap Decode ===\nThời gian: ${timestamp}\nChế độ: ${headerTag}\n\n[NỘI DUNG]\n${decodedText}\n`;
       const blob = new Blob([exportContent], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
@@ -380,9 +391,9 @@
       a.download = `snap-decode-${Date.now()}.txt`;
       a.click();
       URL.revokeObjectURL(url);
-      const btn = document.getElementById("snap-export-btn");
-      btn.innerHTML = '<span>✅</span> Đã tải!';
-      setTimeout(() => { btn.innerHTML = '<span>📤</span> Export .txt'; }, 2000);
+      const label = document.getElementById("snap-export-label");
+      if (label) label.textContent = 'Đã tải xong!';
+      setTimeout(() => { if (label) label.textContent = 'Xuất .txt'; }, 1800);
     });
 
     // Resnap Event
@@ -476,14 +487,14 @@
 
   function makeDraggable(elmnt, header) {
     let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-    header.onmousedown = dragMouseDown;
+    header.addEventListener("mousedown", dragMouseDown);
 
     function dragMouseDown(e) {
       e.preventDefault();
       pos3 = e.clientX;
       pos4 = e.clientY;
-      document.onmouseup = closeDragElement;
-      document.onmousemove = elementDrag;
+      document.addEventListener("mouseup", closeDragElement);
+      document.addEventListener("mousemove", elementDrag);
     }
 
     function elementDrag(e) {
@@ -498,8 +509,8 @@
     }
 
     function closeDragElement() {
-      document.onmouseup = null;
-      document.onmousemove = null;
+      document.removeEventListener("mouseup", closeDragElement);
+      document.removeEventListener("mousemove", elementDrag);
     }
   }
 

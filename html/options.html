@@ -2,121 +2,421 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cài đặt Snap Decode</title>
   <link rel="stylesheet" href="../css/options.css">
 </head>
 <body>
-  <div class="container">
-    <div class="options-header">
-      <h1>⚙️ Cài đặt Snap Decode</h1>
-      <div class="header-tabs">
-        <button class="tab-btn active" data-tab="general">🔧 Chung</button>
-        <button class="tab-btn" data-tab="memory">📝 Lịch sử</button>
-      </div>
-    </div>
-
-    <!-- GENERAL TAB -->
-    <div class="tab-content active" id="tab-general">
-      <div class="card" id="theme-card">
-        <div class="section-title">🎨 Giao diện</div>
-        <p class="description">Chọn chế độ sáng hoặc tối cho giao diện extension.</p>
-        <div class="theme-toggle">
-          <label for="theme-toggle">Dark Mode</label>
-          <label class="toggle-switch">
-            <input type="checkbox" id="theme-toggle">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-      </div>
-
-      <div class="card" id="shortcuts-card">
-        <div class="section-title">⌨️ Phím tắt</div>
-        <p class="description">Xem và tùy chỉnh phím tắt kích hoạt nhanh Snap Decode.</p>
-        <div class="shortcuts-list">
-          <div class="shortcut-item">
-            <span class="shortcut-label">Snap OCR (Tách chữ)</span>
-            <span class="shortcut-key">Alt+X</span>
+  <div class="options-shell">
+    <!-- Top Bar Navigation / Header -->
+    <header class="app-header">
+      <div class="header-inner">
+        <div class="brand-group">
+          <div class="logo-box">
+            <img src="../assets/icon.png" alt="Logo" class="app-logo">
+          </div>
+          <div class="brand-info">
+            <div class="brand-name-row">
+              <h1 class="brand-name">Snap Decode</h1>
+              <span class="engine-tag">Core v2.3</span>
+            </div>
+            <p class="brand-desc">Trung tâm điều khiển & Quản trị dữ liệu giải mã</p>
           </div>
         </div>
-        <a href="#" id="open-shortcuts-link" class="link">🔗 Mở cài đặt phím tắt Chrome</a>
-      </div>
 
-      <div class="card full-width" id="sync-card">
-        <div class="section-title">🔄 Sao lưu & Phục hồi</div>
-        <p class="description">Xuất hoặc nhập cài đặt và lịch sử dưới dạng file JSON.</p>
-        <div class="sync-actions">
-          <div class="sync-group">
-            <span class="sync-label">Cài đặt:</span>
-            <button id="export-settings-btn" class="btn">💾 Export Settings</button>
-            <button id="import-settings-btn" class="btn">📂 Import Settings</button>
-          </div>
-          <div class="sync-group">
-            <span class="sync-label">Lịch sử:</span>
-            <button id="export-memory-btn" class="btn">💾 Export Memory</button>
-            <button id="import-memory-btn" class="btn">📂 Import Memory</button>
-          </div>
-        </div>
-        <input type="file" id="import-settings-file" accept=".json" style="display:none">
-        <input type="file" id="import-memory-file" accept=".json" style="display:none">
-        <div id="sync-msg" class="msg" style="display:none"></div>
-      </div>
-
-      <div class="full-width-actions">
-        <button id="save-btn" class="btn btn-primary">💾 Lưu cài đặt</button>
-        <div id="save-msg" class="msg">Đã lưu thành công!</div>
-      </div>
-    </div>
-
-    <!-- MEMORY TAB -->
-    <div class="tab-content" id="tab-memory">
-      <div class="card" id="analytics-card">
-        <div class="section-title">📊 Analytics Dashboard</div>
-        <p class="description">Thống kê hoạt động trích xuất ký tự OCR và giải mã QR.</p>
-        <div class="analytics-filters">
-          <button class="analytics-filter active" data-range="week">Tuần này</button>
-          <button class="analytics-filter" data-range="month">Tháng này</button>
-          <button class="analytics-filter" data-range="all">Tất cả</button>
-        </div>
-        <div class="analytics-grid">
-          <div class="analytics-stat">
-            <div class="analytics-value" id="analytics-total">0</div>
-            <div class="analytics-label">Tổng Snap</div>
-          </div>
-          <div class="analytics-stat">
-            <div class="analytics-value" id="analytics-ocr">0</div>
-            <div class="analytics-label">🔍 OCR Text</div>
-          </div>
-          <div class="analytics-stat">
-            <div class="analytics-value" id="analytics-qr">0</div>
-            <div class="analytics-label">📷 QR Code</div>
-          </div>
-          <div class="analytics-stat">
-            <div class="analytics-value" id="analytics-chars">0</div>
-            <div class="analytics-label">Ký tự giải mã</div>
+        <div class="header-status-box">
+          <div class="system-status-indicator">
+            <span class="pulse-indicator"></span>
+            <span class="system-status-text">Hệ thống sẵn sàng</span>
           </div>
         </div>
       </div>
 
-      <div class="card" id="memory-card">
-        <div class="section-title">📝 Lịch sử Snap (<span id="memory-count">0</span>)</div>
-        <p class="description">Xem lại các lần trích xuất văn bản và mã QR gần đây.</p>
+      <!-- Segmented Tab Bar -->
+      <nav class="tab-nav" aria-label="Điều hướng cài đặt">
+        <button class="tab-btn active" data-tab="general" type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          <span>Chung & Giao diện</span>
+        </button>
 
-        <div class="memory-toolbar">
-          <input type="text" id="memory-search" placeholder="🔍 Tìm kiếm trong lịch sử...">
-          <button id="memory-clear-btn" class="btn btn-danger">🗑 Xóa tất cả</button>
+        <button class="tab-btn" data-tab="shortcuts" type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect>
+            <path d="M6 8h.001"></path><path d="M10 8h.001"></path><path d="M14 8h.001"></path><path d="M18 8h.001"></path>
+            <path d="M8 12h.001"></path><path d="M12 12h.001"></path><path d="M16 12h.001"></path>
+            <path d="M7 16h10"></path>
+          </svg>
+          <span>Phím tắt</span>
+        </button>
+
+        <button class="tab-btn" data-tab="backend" type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+            <line x1="6" y1="18" x2="6.01" y2="18"></line>
+          </svg>
+          <span>Backend & Engine</span>
+        </button>
+
+        <button class="tab-btn" data-tab="memory" type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+          </svg>
+          <span>Lịch sử & Analytics</span>
+        </button>
+      </nav>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="content-body">
+      <!-- ═════════ TAB 1: GENERAL ═════════ -->
+      <section class="tab-content active" id="tab-general">
+        <div class="cards-grid">
+          <!-- Theme Settings Card -->
+          <div class="panel-card" id="theme-card">
+            <div class="card-header">
+              <div class="header-title-box">
+                <h2 class="section-title">Giao diện người dùng</h2>
+                <p class="description">Tùy biến bảng màu hiển thị theo môi trường làm việc tập trung.</p>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-meta">
+                <span class="setting-name">Chế độ tối (Dark Mode)</span>
+                <span class="setting-hint">Tối ưu độ tương phản dịu mắt cho phiên làm việc đêm</span>
+              </div>
+              <div class="theme-toggle">
+                <label class="toggle-switch" for="theme-toggle">
+                  <input type="checkbox" id="theme-toggle" aria-label="Bật/tắt chế độ tối">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cloud Sync & Backup Card -->
+          <div class="panel-card" id="sync-card">
+            <div class="card-header">
+              <div class="header-title-box">
+                <h2 class="section-title">Sao lưu & Đồng bộ cấu hình</h2>
+                <p class="description">Xuất hoặc nhập toàn bộ thiết lập và dữ liệu snapshot dưới dạng file JSON chuẩn.</p>
+              </div>
+            </div>
+
+            <div class="sync-grid">
+              <div class="sync-column">
+                <span class="sync-subtitle">Cấu hình hệ thống</span>
+                <p class="sync-desc">Lưu trữ theme, hạn mức lưu trữ và trạng thái trải nghiệm.</p>
+                <div class="btn-group">
+                  <button id="export-settings-btn" class="btn btn-secondary" type="button">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span>Xuất Cài đặt (.json)</span>
+                  </button>
+                  <button id="import-settings-btn" class="btn btn-secondary" type="button">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="17 8 12 3 7 8"></polyline>
+                      <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span>Nhập Cài đặt</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="sync-column">
+                <span class="sync-subtitle">Dữ liệu lịch sử quét</span>
+                <p class="sync-desc">Sao lưu snapshot các mã QR đã được giải mã.</p>
+                <div class="btn-group">
+                  <button id="export-memory-btn" class="btn btn-secondary" type="button">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span>Xuất Lịch sử (.json)</span>
+                  </button>
+                  <button id="import-memory-btn" class="btn btn-secondary" type="button">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="17 8 12 3 7 8"></polyline>
+                      <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span>Nhập Lịch sử</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <input type="file" id="import-settings-file" accept=".json" style="display:none">
+            <input type="file" id="import-memory-file" accept=".json" style="display:none">
+            <div id="sync-msg" class="notification-alert" style="display:none"></div>
+          </div>
         </div>
 
-        <div class="memory-settings">
-          <label>Giới hạn lịch sử: <b id="memory-limit-display">50</b> mục</label>
-          <input type="number" id="memory-limit-input" min="10" max="500" value="50" style="width: 70px; margin-left: 8px;">
+        <div class="form-save-footer">
+          <button id="save-btn" class="btn btn-primary" type="button">Lưu cấu hình</button>
+          <div id="save-msg" class="msg" style="display:none;">Đã lưu thành công!</div>
+        </div>
+      </section>
+
+      <!-- ═════════ TAB 2: SHORTCUTS ═════════ -->
+      <section class="tab-content" id="tab-shortcuts">
+        <div class="panel-card" id="shortcuts-card">
+          <div class="card-header">
+            <div class="header-title-box">
+              <h2 class="section-title">Phím tắt thao tác nhanh</h2>
+              <p class="description">Kích hoạt tác vụ chụp vùng màn hình mọi lúc mà không cần mở popup.</p>
+            </div>
+            <a href="#" id="open-shortcuts-link" class="btn-link">
+              <span>Tùy chỉnh trong Chrome</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+              </svg>
+            </a>
+          </div>
+
+          <div class="shortcuts-table">
+            <div class="shortcut-row">
+              <div class="shortcut-detail">
+                <span class="shortcut-title">Snap QR Code</span>
+                <span class="shortcut-sub">Bật con trỏ crosshair chụp vùng màn hình để giải mã QR</span>
+              </div>
+              <div class="shortcut-badge">
+                <kbd>Alt</kbd> + <kbd>X</kbd>
+              </div>
+            </div>
+
+            <div class="shortcut-row">
+              <div class="shortcut-detail">
+                <span class="shortcut-title">Hủy chế độ quét</span>
+                <span class="shortcut-sub">Đóng khung chọn vùng chụp và khôi phục con trỏ chuột</span>
+              </div>
+              <div class="shortcut-badge">
+                <kbd>Esc</kbd>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═════════ TAB 3: BACKEND & ENGINE ═════════ -->
+      <section class="tab-content" id="tab-backend">
+        <!-- Client-Side Pure JS Engine Card -->
+        <div class="panel-card" id="client-engine-card">
+          <div class="card-header">
+            <div class="header-title-box">
+              <h2 class="section-title">Client-Side Pure JS Engine (Mặc định)</h2>
+              <p class="description">Giải mã mã QR tức thì qua Canvas & Web API ngay trong trình duyệt. Hoạt động 100% offline, không bắt buộc cài đặt hay chạy backend Python.</p>
+            </div>
+            <span class="service-tag" style="background: var(--snap-opt-success-subtle); color: var(--snap-opt-success); border: 1px solid rgba(16, 185, 129, 0.2); padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;">Sẵn sàng • In-Browser</span>
+          </div>
+
+          <div class="backend-details-grid" style="padding-top: 0;">
+            <div class="detail-item">
+              <span class="detail-label">Cơ chế xử lý:</span>
+              <span class="detail-value">HTML5 Canvas + Pure JS Engine</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Phụ thuộc máy chủ:</span>
+              <span class="detail-value">0 (Hoàn toàn độc lập)</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Tốc độ giải mã:</span>
+              <span class="detail-value">~5ms - 15ms / frame (Tức thì)</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Tiêu thụ tài nguyên:</span>
+              <span class="detail-value">&lt; 2MB RAM (Cực kỳ nhẹ)</span>
+            </div>
+          </div>
         </div>
 
-        <div class="memory-list" id="memory-list">
-          <div class="memory-empty">Đang tải lịch sử...</div>
-        </div>
-      </div>
-    </div>
+        <!-- In-Browser Engine Information Card -->
+        <div class="panel-card" id="backend-card">
+          <div class="card-header">
+            <div class="header-title-box">
+              <h2 class="section-title">Engine Giải Mã (Client-side)</h2>
+              <p class="description">Tiện ích hoạt động 100% nội bộ trong trình duyệt, không cần cài đặt backend hay phần mềm ngoài.</p>
+            </div>
+            <div class="badge badge-success">100% Offline</div>
+          </div>
 
+          <div class="backend-status-card">
+            <div class="status-summary-row">
+              <div class="status-indicator-col">
+                <span class="status-badge-dot"></span>
+                <div class="status-text-group">
+                  <span class="status-main-label" id="backend-health-label">In-Browser JS Engine (Sẵn sàng)</span>
+                  <span class="status-sub-label">Cơ chế: 6-Pass Progressive Pipeline • Tự động giải mã siêu tốc</span>
+                </div>
+              </div>
+              <button id="check-backend-btn" class="btn btn-secondary" type="button">Kiểm tra Engine</button>
+            </div>
+
+            <div class="backend-details-grid">
+              <div class="detail-item">
+                <span class="detail-label">Bộ giải mã:</span>
+                <span class="detail-value">jsQR + 6-Pass Preprocessors</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Môi trường:</span>
+                <span class="detail-value">Chromium Sandbox (100% Client-side)</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Bảo mật dữ liệu:</span>
+                <span class="detail-value">Tuyệt đối không gửi ảnh ra ngoài</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Tiêu thụ rảnh rỗi:</span>
+                <span class="detail-value">0% CPU • 0% RAM</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Supported Document Platforms Card -->
+        <div class="panel-card" id="supported-platforms-card">
+          <div class="card-header">
+            <div class="header-title-box">
+              <h2 class="section-title">Nền tảng tài liệu hỗ trợ (DocUnlocker)</h2>
+              <p class="description">Snap Decode hỗ trợ tự động mở khóa trang mờ và xuất PDF trên 4 nền tảng học liệu & slide thuyết trình:</p>
+            </div>
+          </div>
+
+          <div class="service-badges-grid">
+            <div class="service-card">
+              <div class="service-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+              </div>
+              <span class="service-name">Scribd</span>
+              <span class="service-tag">Hỗ trợ đầy đủ</span>
+            </div>
+
+            <div class="service-card">
+              <div class="service-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+              </div>
+              <span class="service-name">StuDocu</span>
+              <span class="service-tag">Mở khóa trang</span>
+            </div>
+
+            <div class="service-card">
+              <div class="service-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+              </div>
+              <span class="service-name">SlideShare</span>
+              <span class="service-tag">Tải Slide HD</span>
+            </div>
+
+            <div class="service-card">
+              <div class="service-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+              </div>
+              <span class="service-name">SlideServe</span>
+              <span class="service-tag new">Mới hỗ trợ</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═════════ TAB 4: MEMORY & ANALYTICS ═════════ -->
+      <section class="tab-content" id="tab-memory">
+        <!-- Analytics Overview -->
+        <div class="panel-card" id="analytics-card">
+          <div class="card-header">
+            <div class="header-title-box">
+              <h2 class="section-title">Bảng phân tích hiệu suất</h2>
+              <p class="description">Thống kê khối lượng trích xuất ký tự và giải mã mã phản hồi nhanh.</p>
+            </div>
+
+            <div class="analytics-filters" role="group" aria-label="Bộ lọc thời gian">
+              <button class="analytics-filter active" data-range="week" type="button">7 ngày qua</button>
+              <button class="analytics-filter" data-range="month" type="button">30 ngày qua</button>
+              <button class="analytics-filter" data-range="all" type="button">Tất cả</button>
+            </div>
+          </div>
+
+          <div class="analytics-grid">
+            <div class="stat-tile">
+              <span class="stat-number" id="analytics-total">0</span>
+              <span class="stat-caption">Tổng lần quét</span>
+            </div>
+            <div class="stat-tile">
+              <span class="stat-number" id="analytics-qr">0</span>
+              <span class="stat-caption">Mã QR Code</span>
+            </div>
+            <div class="stat-tile">
+              <span class="stat-number" id="analytics-ocr">0</span>
+              <span class="stat-caption">Ký tự OCR</span>
+            </div>
+            <div class="stat-tile">
+              <span class="stat-number" id="analytics-chars">0</span>
+              <span class="stat-caption">Ký tự giải mã</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Snap History Explorer -->
+        <div class="panel-card" id="memory-card">
+          <div class="card-header">
+            <div class="header-title-box">
+              <h2 class="section-title">Lịch sử giải mã (<span id="memory-count">0</span>)</h2>
+              <p class="description">Truy cứu và sao chép các kết quả quét gần đây.</p>
+            </div>
+
+            <div class="memory-global-actions">
+              <button id="export-memory-csv-btn" class="btn btn-secondary btn-sm" type="button" title="Xuất bảng CSV">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span>Xuất CSV</span>
+              </button>
+              <button id="memory-clear-btn" class="btn btn-danger btn-sm" type="button">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+                <span>Xóa lịch sử</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="history-filter-bar">
+            <div class="search-input-wrapper">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="memory-search" placeholder="Tìm kiếm nội dung mã QR hoặc liên kết..." autocomplete="off">
+            </div>
+
+            <div class="memory-limit-control">
+              <span class="limit-label">Giới hạn lưu:</span>
+              <input type="number" id="memory-limit-input" min="10" max="500" value="50">
+              <span class="limit-sub">(Tối đa <b id="memory-limit-display">50</b> mục)</span>
+            </div>
+          </div>
+
+          <!-- History Feed List -->
+          <div class="memory-list" id="memory-list">
+            <div class="memory-empty">Đang tải lịch sử...</div>
+          </div>
+        </div>
+      </section>
+    </main>
   </div>
 
   <script src="../js/options.js"></script>
